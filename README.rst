@@ -8,6 +8,13 @@ to connect, and gives  the  user the  ability to switch between client apps at t
 Currently, patches to enable support for the daemon are available for libgraphlcd, which in turn enables
 support for lcdproc, vdr, and any other applications able to use that library.
 
+=======
+Warning
+=======
+I'm discontinuing this after someone made a fuzz about a feature he decided he want a decade later. 
+And as far I am concerned, Arch Linux's AUR administrators find this behavior just fine, so I'm not wasting my efforts on this anymore.
+I can still fix issues as I always did and help via mail, but keep in mind Arch Linux is impossible to be supported.
+
 ============
 Requirements
 ============
