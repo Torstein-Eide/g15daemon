@@ -108,9 +108,11 @@ CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(sbindir)" "$(DESTDIR)$(includedir)"
 PROGRAMS = $(noinst_PROGRAMS) $(sbin_PROGRAMS)
 am_g15daemon_OBJECTS = utility_funcs.$(OBJEXT) main.$(OBJEXT) \
-	linked_lists.$(OBJEXT) g15_plugins.$(OBJEXT)
+	linked_lists.$(OBJEXT) g15_plugins.$(OBJEXT) \
+	sd_notify_util.$(OBJEXT)
 g15daemon_OBJECTS = $(am_g15daemon_OBJECTS)
-g15daemon_DEPENDENCIES =
+am__DEPENDENCIES_1 =
+g15daemon_DEPENDENCIES = $(am__DEPENDENCIES_1)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
@@ -139,7 +141,8 @@ depcomp = $(SHELL) $(top_srcdir)/config/depcomp
 am__maybe_remake_depfiles = depfiles
 am__depfiles_remade = ./$(DEPDIR)/g15_plugins.Po \
 	./$(DEPDIR)/lcdclient_test.Po ./$(DEPDIR)/linked_lists.Po \
-	./$(DEPDIR)/main.Po ./$(DEPDIR)/utility_funcs.Po
+	./$(DEPDIR)/main.Po ./$(DEPDIR)/sd_notify_util.Po \
+	./$(DEPDIR)/utility_funcs.Po
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
@@ -252,6 +255,8 @@ LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
+LIBSYSTEMD_CFLAGS = @LIBSYSTEMD_CFLAGS@
+LIBSYSTEMD_LIBS = @LIBSYSTEMD_LIBS@
 LIBTOOL = @LIBTOOL@
 LIPO = @LIPO@
 LN_S = @LN_S@
@@ -274,6 +279,9 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PKG_CONFIG = @PKG_CONFIG@
+PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
+PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
 RANLIB = @RANLIB@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
@@ -341,8 +349,8 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 METASOURCES = AUTO
 noinst_HEADERS = g15logo.h
-g15daemon_SOURCES = utility_funcs.c g15daemon.h main.c linked_lists.c g15_plugins.c
-g15daemon_LDADD = -ldl
+g15daemon_SOURCES = utility_funcs.c g15daemon.h main.c linked_lists.c g15_plugins.c sd_notify_util.c sd_notify_util.h
+g15daemon_LDADD = -ldl $(LIBSYSTEMD_LIBS)
 g15daemon_LDFLAGS = -rdynamic
 g15daemontest_SOURCES = lcdclient_test.c
 AM_CPPFLAGS = -DG15DAEMON_BUILD -Wall -I$(top_builddir)/libg15daemon_client/
@@ -448,6 +456,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lcdclient_test.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/linked_lists.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/main.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sd_notify_util.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/utility_funcs.Po@am__quote@ # am--include-marker
 
 $(am__depfiles_remade):
@@ -636,6 +645,7 @@ distclean: distclean-am
 	-rm -f ./$(DEPDIR)/lcdclient_test.Po
 	-rm -f ./$(DEPDIR)/linked_lists.Po
 	-rm -f ./$(DEPDIR)/main.Po
+	-rm -f ./$(DEPDIR)/sd_notify_util.Po
 	-rm -f ./$(DEPDIR)/utility_funcs.Po
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
@@ -686,6 +696,7 @@ maintainer-clean: maintainer-clean-am
 	-rm -f ./$(DEPDIR)/lcdclient_test.Po
 	-rm -f ./$(DEPDIR)/linked_lists.Po
 	-rm -f ./$(DEPDIR)/main.Po
+	-rm -f ./$(DEPDIR)/sd_notify_util.Po
 	-rm -f ./$(DEPDIR)/utility_funcs.Po
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic

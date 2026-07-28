@@ -48,6 +48,9 @@
 /* Define to 1 if you have the 'pthread' library (-lpthread). */
 #undef HAVE_LIBPTHREAD
 
+/* Define if libsystemd is available */
+#undef HAVE_LIBSYSTEMD
+
 /* Define to 1 if you have the <linux/input.h> header file. */
 #undef HAVE_LINUX_INPUT_H
 
