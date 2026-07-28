@@ -40,6 +40,7 @@
 #include <libg15.h>
 #include <libg15render.h>
 #include "g15daemon.h"
+#include "sd_notify_util.h"
 #ifndef LIBG15_VERSION
 	#define LIBG15_VERSION 1000
 #endif
@@ -214,12 +215,34 @@ static void *keyboard_watch_thread(void *lcdlist){
 	return NULL;
 }
 
+/* Compact "1h02m03s" uptime string, dropping leading zero units. */
+static void format_uptime(double seconds, char *out, size_t out_len) {
+	unsigned long s = (unsigned long)seconds;
+	unsigned long h = s / 3600;
+	unsigned long m = (s % 3600) / 60;
+	unsigned long r = s % 60;
+
+	if (h)
+		snprintf(out, out_len, "%luh%02lum%02lus", h, m, r);
+	else if (m)
+		snprintf(out, out_len, "%lum%02lus", m, r);
+	else
+		snprintf(out, out_len, "%lus", r);
+}
+
 static void *lcd_draw_thread(void *lcdlist){
 	g15daemon_t *masterlist = (g15daemon_t*)(lcdlist);
 	/* unsigned int fps = 0; */
 	lcd_t *displaying = masterlist->tail->lcd;
 	memset(displaying->buf,0,1024);
 	static int prev_state=0;
+	/* sd_notify() throttling - see g15u_sd_notify_status/_watchdog calls
+	 * below. This loop already wakes at least once/second even when idle
+	 * (g15daemon_wait_refresh()'s internal 1s retry), so no extra thread
+	 * is needed to drive these. */
+	struct g15_timer status_timer, watchdog_timer;
+	g15_timer_start(&status_timer);
+	g15_timer_start(&watchdog_timer);
 	g15daemon_sleep(2);
 
 	while (!leaving) {
@@ -233,7 +256,17 @@ static void *lcd_draw_thread(void *lcdlist){
 		if the current screen is less than 20ms from the previous (equivelant to 50fps) delay it
 		this allows a real-world fps of 40fps with no almost frame loss and reduces peak usb bus-load */
 		g15daemon_log(LOG_DEBUG,"Updating LCD");
-		uf_write_buf_to_g15(displaying);
+		{
+			struct g15_timer draw_timer;
+			g15_timer_start(&draw_timer);
+			uf_write_buf_to_g15(displaying);
+			masterlist->last_draw_ms = g15_timer_ms(&draw_timer);
+			if(masterlist->min_draw_ms == 0 || masterlist->last_draw_ms < masterlist->min_draw_ms)
+				masterlist->min_draw_ms = masterlist->last_draw_ms;
+			if(masterlist->last_draw_ms > masterlist->max_draw_ms)
+				masterlist->max_draw_ms = masterlist->last_draw_ms;
+			g15daemon_log(LOG_DEBUG,"LCD draw took %.2f ms", masterlist->last_draw_ms);
+		}
 		g15daemon_log(LOG_DEBUG,"LCD Update Complete");
 
 		if(prev_state!=displaying->backlight_state && set_backlight!=0) {
@@ -253,8 +286,30 @@ static void *lcd_draw_thread(void *lcdlist){
 			if(displaying->masterlist->remote_keyhandler_sock==0) // only allow mled control if the macro recorder isnt running 
 				setLEDs(displaying->mkey_state);  
 			pthread_mutex_unlock(&g15lib_mutex);
-				displaying->state_changed = 0; 
+				displaying->state_changed = 0;
 		}
+
+		if(g15_timer_ms(&watchdog_timer) >= 10000.0) {
+			g15u_sd_notify_watchdog();
+			g15_timer_start(&watchdog_timer);
+		}
+		if(g15_timer_ms(&status_timer) >= 5000.0) {
+			struct timespec now;
+			char uptime_str[32];
+			const char *fg_name = masterlist->current->lcd->client_name[0] ?
+					       masterlist->current->lcd->client_name : "clock";
+
+			clock_gettime(CLOCK_MONOTONIC, &now);
+			format_uptime((now.tv_sec - masterlist->start_time.tv_sec) +
+				      (now.tv_nsec - masterlist->start_time.tv_nsec) / 1e9,
+				      uptime_str, sizeof(uptime_str));
+			g15u_sd_notify_status("g15daemon %s | up %s | clients=%lu (%lu total) | fg=%s | last draw=%.2fms (min %.2f/max %.2f)",
+					       PACKAGE_VERSION, uptime_str, masterlist->numclients,
+					       masterlist->total_clients_connected, fg_name,
+					       masterlist->last_draw_ms, masterlist->min_draw_ms, masterlist->max_draw_ms);
+			g15_timer_start(&status_timer);
+		}
+
 		pthread_mutex_unlock(&lcdlist_mutex);
 	}
 	return NULL;
@@ -417,9 +472,17 @@ int main (int argc, char *argv[]) {
 #endif
 
 	/* init stuff here..  */
-	if((retval=initLibG15())!=G15_NO_ERROR){
-		g15daemon_log(LOG_ERR,"Unable to attach to the G15 Keyboard... exiting");
-		exit(1);
+	{
+		struct g15_timer phase;
+		g15_timer_start(&phase);
+		if((retval=initLibG15())!=G15_NO_ERROR){
+			g15daemon_log(LOG_ERR,"Unable to attach to the G15 Keyboard... exiting");
+			exit(1);
+		}
+		/* LOG_INFO: informational, not a warning condition - silent by
+		 * default unless -d raises verbosity, matching this codebase's
+		 * other LOG_INFO lines. */
+		g15daemon_log(LOG_INFO,"initLibG15() took %.2f ms\n", g15_timer_ms(&phase));
 	}
 	if(!g15daemon_debug)
 		daemon(0,0);
@@ -441,6 +504,7 @@ int main (int argc, char *argv[]) {
 		}
 		/* initialise the linked list */
 		lcdlist = ll_lcdlist_init();
+		clock_gettime(CLOCK_MONOTONIC, &lcdlist->start_time);
 		lcdlist->nobody = nobody;
 		setLCDContrast(1);
 		setLEDs(0);
@@ -482,18 +546,29 @@ int main (int argc, char *argv[]) {
 			goto exitnow;
 		}
 		g15daemon_log(LOG_INFO,"%s loaded\n",PACKAGE_STRING);
-		snprintf((char*)location,1024,"%s/%s",DATADIR,"g15daemon/splash/g15logo2.wbmp");
-		g15canvas *canvas = (g15canvas *)g15daemon_xmalloc (sizeof (g15canvas));
-		memset (canvas->buffer, 0, G15_BUFFER_LEN);
-		canvas->mode_cache = 0;
-		canvas->mode_reverse = 0;
-		canvas->mode_xor = 0;
-		g15r_loadWbmpSplash(canvas,(char*)location);
-		memcpy (lcdlist->tail->lcd->buf, canvas->buffer, G15_BUFFER_LEN);
-		free (canvas);
-		uf_write_buf_to_g15(lcdlist->tail->lcd);
-		snprintf((char*)location,1024,"%s",PLUGINDIR);
-		loaded_plugins = g15_open_all_plugins(lcdlist,(char*)location);
+		{
+			struct g15_timer phase;
+			g15_timer_start(&phase);
+			snprintf((char*)location,1024,"%s/%s",DATADIR,"g15daemon/splash/g15logo2.wbmp");
+			g15canvas *canvas = (g15canvas *)g15daemon_xmalloc (sizeof (g15canvas));
+			memset (canvas->buffer, 0, G15_BUFFER_LEN);
+			canvas->mode_cache = 0;
+			canvas->mode_reverse = 0;
+			canvas->mode_xor = 0;
+			g15r_loadWbmpSplash(canvas,(char*)location);
+			memcpy (lcdlist->tail->lcd->buf, canvas->buffer, G15_BUFFER_LEN);
+			free (canvas);
+			uf_write_buf_to_g15(lcdlist->tail->lcd);
+			g15daemon_log(LOG_INFO,"Splash load+draw took %.2f ms\n", g15_timer_ms(&phase));
+		}
+		{
+			struct g15_timer phase;
+			g15_timer_start(&phase);
+			snprintf((char*)location,1024,"%s",PLUGINDIR);
+			loaded_plugins = g15_open_all_plugins(lcdlist,(char*)location);
+			g15daemon_log(LOG_INFO,"Plugin load took %.2f ms\n", g15_timer_ms(&phase));
+		}
+		g15u_sd_notify_ready("g15daemon %s | starting", PACKAGE_VERSION);
 		new_action.sa_handler = g15daemon_sighandler;
 		new_action.sa_flags = 0;
 		sigaction(SIGINT, &new_action, NULL);
@@ -505,6 +580,7 @@ int main (int argc, char *argv[]) {
 		}
 		while( leaving == 0);
 		g15daemon_log(LOG_INFO,"Leaving by request");
+		g15u_sd_notify_stopping();
 
 		pthread_join(lcd_thread,NULL);
 		pthread_join(keyboard_thread,NULL);

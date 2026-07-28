@@ -25,6 +25,14 @@ AC_CHECK_LIB([pthread], [pthread_mutex_init])
 
 AC_CHECK_FUNC(daemon,AC_DEFINE(HAVE_DAEMON,1,[Define if daemon() is available]),[])
 
+# Soft-optional: sd_notify() readiness/watchdog/status support. Missing
+# libsystemd isn't fatal - the notify calls just become no-ops (see
+# g15daemon/sd_notify_util.c).
+PKG_CHECK_MODULES([LIBSYSTEMD], [libsystemd],
+    [AC_DEFINE([HAVE_LIBSYSTEMD], [1], [Define if libsystemd is available])],
+    [:])
+CPPFLAGS="$CPPFLAGS $LIBSYSTEMD_CFLAGS"
+
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
 AC_TYPE_PID_T

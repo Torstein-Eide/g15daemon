@@ -41,6 +41,28 @@
 #include <pthread.h>
 #include <pwd.h>
 #include <syslog.h>
+#include <time.h>
+
+/* Reusable millisecond timing pair, e.g.:
+ *   struct g15_timer t; g15_timer_start(&t); ...; double ms = g15_timer_ms(&t);
+ * Used to instrument how long individual phases of the daemon take (startup
+ * phases, LCD draw time) - see main.c. Formalizes the ad-hoc gettimeofday()
+ * instrumentation used to track down a mutex-starvation bug into something
+ * permanent rather than one-off debug scaffolding that has to be re-added
+ * every time. */
+struct g15_timer {
+	struct timespec t0;
+};
+
+static inline void g15_timer_start(struct g15_timer *t) {
+	clock_gettime(CLOCK_MONOTONIC, &t->t0);
+}
+
+static inline double g15_timer_ms(struct g15_timer *t) {
+	struct timespec t1;
+	clock_gettime(CLOCK_MONOTONIC, &t1);
+	return (t1.tv_sec - t->t0.tv_sec) * 1000.0 + (t1.tv_nsec - t->t0.tv_nsec) / 1e6;
+}
 
 #define CLIENT_CMD_GET_KEYSTATE 'k'
 #define CLIENT_CMD_SWITCH_PRIORITIES 'p'
@@ -179,6 +201,13 @@ typedef struct lcd_s {
 	unsigned int never_select;
 	/* only used for plugins */
 	plugin_t *g15plugin;
+	/* Best-effort identification of the connected process, resolved once
+	 * at connect time via peer_ident.c (falls back to "peer <ip>:<port>"
+	 * if the owning PID can't be resolved - see peer_ident.h). Used for
+	 * the sd_notify STATUS= foreground field and the registered-clients
+	 * log line. */
+	char client_name[64];
+	struct timespec connected_at;
 }
 lcd_s;
 
@@ -208,6 +237,12 @@ struct g15daemon_s {
 	configfile_t *config;
 	unsigned int kb_backlight_state; // master state
 	unsigned int remote_keyhandler_sock;
+	/* systemd status reporting - see sd_notify_util.h and main.c */
+	struct timespec start_time;
+	unsigned long total_clients_connected;
+	double last_draw_ms;
+	double min_draw_ms;
+	double max_draw_ms;
 }
 static g15daemon_s;
 
