@@ -519,11 +519,9 @@ int g15daemon_cfg_write_bool(config_section_t *section, char *key, unsigned int 
 
 /* return bool as int from key in sectionname */
 int g15daemon_cfg_read_bool(config_section_t *section, char *key, int defaultval) {
-	int retval=0;
 	config_items_t *item = uf_search_confitem(section, key);
 	if(item){
-		retval = 1^retval?(strncmp(item->value,"On",2)==0):1;
-		return retval;
+		return strncmp(item->value,"On",2)==0;
 	}
 	g15daemon_cfg_write_bool(section, key, defaultval);
 	return defaultval;
