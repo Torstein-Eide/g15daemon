@@ -127,13 +127,11 @@ these settings to apply.
 FreeBSD
 =======
 
-**No longer works, as of the libg15 rewrite mentioned above.** This
-section describes the old libusb-based libg15 and is kept for historical
-reference: G-Keys worked a bit flaky (sometimes lags occurs and I don't
-know how to fix it), LCD worked as expected. libg15 now talks to the
-Linux kernel's ``hid-lg-g15`` HID driver directly (sysfs/fbdev/evdev, no
-libusb) and its ``configure`` hard-errors on any non-Linux ``$host_os`` -
-this repo's own ``configure.ac`` still has a ``*freebsd*`` branch
-(``AC_DEFINE([OSTYPE_FREEBSD]...)``), but since g15daemon hard-depends on
-libg15, that branch can no longer actually be reached in practice.
-``README.FreeBSD``/``README.Solaris`` in this repo are similarly stale.
+G-Keys works a bit flaky (sometimes lags occurs and I don't know how to fix it)
+LCD works as expected.
+
+Works via libg15's libusb backend (see the note above): libg15 now has
+two backends selected by ``$host_os`` at configure time - Linux uses the
+kernel's ``hid-lg-g15`` HID driver directly, while FreeBSD/Solaris/Darwin
+automatically fall back to the original libusb-based implementation,
+unchanged from before that work.
