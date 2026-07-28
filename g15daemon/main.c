@@ -205,7 +205,7 @@ static void *keyboard_watch_thread(void *lcdlist){
 			lastkeys = keypresses;
 		}else if(retval == -ENODEV && LIBG15_VERSION>=1200) {
 			pthread_mutex_lock(&g15lib_mutex);
-			while((retval=re_initLibG15() != G15_NO_ERROR) && !leaving){
+			while(((retval=re_initLibG15()) != G15_NO_ERROR) && !leaving){
 				g15daemon_log(LOG_WARNING,"Keyboard has gone.. Retrying\n");
 				sleep(1);
 			}
