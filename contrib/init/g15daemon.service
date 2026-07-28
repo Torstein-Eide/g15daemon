@@ -8,6 +8,29 @@ Documentation=man:g15daemon(1)
 Type=forking
 PIDFile=/run/g15daemon.pid
 ExecStart=/usr/sbin/g15daemon
+# g15daemon still calls sd_notify() for READY=1/STATUS=/WATCHDOG=1 even
+# though Type=forking doesn't require it: NotifyAccess=main accepts
+# notifications from whatever PID the PIDFile above resolves to once
+# systemd has read it, so `systemctl status g15daemon` shows live
+# version/uptime/client/foreground info without needing Type=notify.
+NotifyAccess=main
+WatchdogSec=30
+# Needed for g15daemon to resolve a connected TCP client's process name
+# (used in the STATUS= "fg=" field and the registered-clients log line):
+# after g15daemon drops root to the "nobody" user, reading another user's
+# /proc/<pid>/fd/ to match a client's socket back to its owning process
+# needs CAP_SYS_PTRACE. Without it, client names gracefully fall back to
+# "peer <ip>:<port>" instead - see g15daemon/peer_ident.c.
+#
+# CAP_SETUID/CAP_SETGID must stay in the bounding set too - g15daemon
+# starts as root and calls seteuid()/setegid() to drop to "nobody" once
+# it's opened the hardware fds (main.c). Restricting the bounding set to
+# just CAP_SYS_PTRACE breaks that seteuid()/setegid() call (its return
+# value isn't checked), leaving the daemon stuck running as root instead
+# of dropping privileges - confirmed live via /proc/<pid>/status Uid: line
+# still reading "0 0 0 0" after startup with the narrower set.
+AmbientCapabilities=CAP_SYS_PTRACE
+CapabilityBoundingSet=CAP_SYS_PTRACE CAP_SETUID CAP_SETGID
 
 [Install]
 #WantedBy=sys-subsystem-usb-g15.device
