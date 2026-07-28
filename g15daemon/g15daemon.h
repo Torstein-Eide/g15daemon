@@ -224,8 +224,7 @@ struct lcdnode_s {
 	lcdnode_t *next;
 	lcdnode_t *last_priority;
 	lcd_t *lcd;
-}
-static lcdnode_s;
+};
 
 struct g15daemon_s {
 	lcdnode_t *head;
@@ -243,11 +242,18 @@ struct g15daemon_s {
 	double last_draw_ms;
 	double min_draw_ms;
 	double max_draw_ms;
-}
-static g15daemon_s;
+};
 
-static pthread_mutex_t lcdlist_mutex;
-static pthread_mutex_t g15lib_mutex;
+/* Defined (storage allocated) in linked_lists.c/main.c respectively - these
+ * must be plain global symbols, not "static", because plugins/g15_plugin_net.c
+ * builds into a separately-dlopen'd .so and needs to resolve the *same*
+ * mutex instances as the daemon binary via -rdynamic. A "static" declaration
+ * here previously gave every translation unit (including each plugin) its
+ * own private, mostly-uninitialized copy, so locking provided no actual
+ * cross-file mutual exclusion - confirmed via nm showing distinct local 'b'
+ * symbols per .o. */
+extern pthread_mutex_t lcdlist_mutex;
+extern pthread_mutex_t g15lib_mutex;
 /* Separate mutex for keypress reads: uf_read_keypresses() polls with a
  * timeout and holds its mutex for the full poll duration, so sharing
  * g15lib_mutex with LCD/LED writes let keyboard_watch_thread's near-
@@ -255,7 +261,7 @@ static pthread_mutex_t g15lib_mutex;
  * time (glibc mutexes aren't FIFO-fair). Keys and LCD/LED content now live
  * on independent kernel devices (evdev vs fbdev/sysfs), so there is no
  * correctness reason to serialize them against each other. */
-static pthread_mutex_t g15keys_mutex;
+extern pthread_mutex_t g15keys_mutex;
 
 /* server hello */
 #define SERV_HELO "G15 daemon HELLO"

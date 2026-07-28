@@ -32,6 +32,10 @@ extern lcd_t *keyhandler;
 extern unsigned int client_handles_keys;
 extern plugin_info_t *generic_info;
 
+/* definition (storage) for the process-wide mutex declared extern in
+ * g15daemon.h - see the comment there for why this must not be static */
+pthread_mutex_t lcdlist_mutex;
+
 lcd_t static * ll_create_lcd () {
 	lcd_t *lcd = g15daemon_xmalloc (sizeof (lcd_t));
 	lcd->max_x = LCD_WIDTH;

@@ -55,6 +55,11 @@ static unsigned int set_backlight = 0;
 struct lcd_t *keyhandler = NULL;
 static int loaded_plugins = 0;
 
+/* definitions (storage) for the process-wide mutexes declared extern in
+ * g15daemon.h - see the comment there for why these must not be static */
+pthread_mutex_t g15lib_mutex;
+pthread_mutex_t g15keys_mutex;
+
 /* send event to foreground client's eventlistener */
 int g15daemon_send_event(void *caller, unsigned int event, unsigned long value){
 	switch(event) {
