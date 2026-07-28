@@ -161,7 +161,9 @@ void *plugin_thread(plugin_t *plugin_args) {
 	void *handle = plugin_args->plugin_handle;
 
 	if(plugin_args->info->plugin_run!=NULL||plugin_args->info->event_handler!=NULL) {
-		g15daemon_log(LOG_ERR,"Plugin \"%s\" boot successful.",info->name);
+		/* was LOG_ERR - a success message has no business at error
+		 * severity; likely copy-paste from a nearby real error line. */
+		g15daemon_log(LOG_INFO,"Plugin \"%s\" boot successful.",info->name);
 	}
 	else {
 		return NULL;
