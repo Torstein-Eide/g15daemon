@@ -1,4 +1,4 @@
-/* config.h.in.  Generated from configure.in by autoheader.  */
+/* config.h.in.  Generated from configure.ac by autoheader.  */
 
 /* Date of compilation */
 #undef BUILD_DATE
@@ -12,10 +12,10 @@
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #undef HAVE_ARPA_INET_H
 
-/* Define to 1 if you have the `backtrace' function. */
+/* Define to 1 if you have the 'backtrace' function. */
 #undef HAVE_BACKTRACE
 
-/* Define to 1 if you have the `backtrace_symbols' function. */
+/* Define to 1 if you have the 'backtrace_symbols' function. */
 #undef HAVE_BACKTRACE_SYMBOLS
 
 /* Define if daemon() is available */
@@ -33,19 +33,19 @@
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
-/* Define to 1 if you have the `g15' library (-lg15). */
+/* Define to 1 if you have the 'g15' library (-lg15). */
 #undef HAVE_LIBG15
 
-/* Define to 1 if you have the `g15render' library (-lg15render). */
+/* Define to 1 if you have the 'g15render' library (-lg15render). */
 #undef HAVE_LIBG15RENDER
 
 /* Define to 1 if you have the <libg15.h> header file. */
 #undef HAVE_LIBG15_H
 
-/* Define to 1 if you have the `m' library (-lm). */
+/* Define to 1 if you have the 'm' library (-lm). */
 #undef HAVE_LIBM
 
-/* Define to 1 if you have the `pthread' library (-lpthread). */
+/* Define to 1 if you have the 'pthread' library (-lpthread). */
 #undef HAVE_LIBPTHREAD
 
 /* Define to 1 if you have the <linux/input.h> header file. */
@@ -54,28 +54,28 @@
 /* Define to 1 if you have the <linux/uinput.h> header file. */
 #undef HAVE_LINUX_UINPUT_H
 
-/* Define to 1 if you have the <memory.h> header file. */
-#undef HAVE_MEMORY_H
-
-/* Define to 1 if you have the `memset' function. */
+/* Define to 1 if you have the 'memset' function. */
 #undef HAVE_MEMSET
 
-/* Define to 1 if you have the `select' function. */
+/* Define to 1 if you have the 'select' function. */
 #undef HAVE_SELECT
 
-/* Define to 1 if you have the `socket' function. */
+/* Define to 1 if you have the 'socket' function. */
 #undef HAVE_SOCKET
 
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
 
+/* Define to 1 if you have the <stdio.h> header file. */
+#undef HAVE_STDIO_H
+
 /* Define to 1 if you have the <stdlib.h> header file. */
 #undef HAVE_STDLIB_H
 
-/* Define to 1 if you have the `strerror' function. */
+/* Define to 1 if you have the 'strerror' function. */
 #undef HAVE_STRERROR
 
-/* Define to 1 if you have the `strftime' function. */
+/* Define to 1 if you have the 'strftime' function. */
 #undef HAVE_STRFTIME
 
 /* Define to 1 if you have the <strings.h> header file. */
@@ -108,14 +108,17 @@
 /* Define if libusb implementation blocks on read or write */
 #undef LIBUSB_BLOCKS
 
+/* Define to the sub-directory where libtool stores uninstalled libraries. */
+#undef LT_OBJDIR
+
 /* Target OS is Darwin */
 #undef OSTYPE_DARWIN
 
-/* Target OS is Linux */
-#undef OSTYPE_LINUX
-
 /* Target OS is FreeBSD */
 #undef OSTYPE_FREEBSD
+
+/* Target OS is Linux */
+#undef OSTYPE_LINUX
 
 /* Target OS is unknown */
 #undef OSTYPE_OTHER
@@ -138,29 +141,34 @@
 /* Define to the one symbol short name of this package. */
 #undef PACKAGE_TARNAME
 
+/* Define to the home page for this package. */
+#undef PACKAGE_URL
+
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
 
-/* Define to the type of arg 1 for `select'. */
+/* Define to the type of arg 1 for 'select'. */
 #undef SELECT_TYPE_ARG1
 
-/* Define to the type of args 2, 3 and 4 for `select'. */
+/* Define to the type of args 2, 3 and 4 for 'select'. */
 #undef SELECT_TYPE_ARG234
 
-/* Define to the type of arg 5 for `select'. */
+/* Define to the type of arg 5 for 'select'. */
 #undef SELECT_TYPE_ARG5
 
-/* Define to 1 if you have the ANSI C header files. */
+/* Define to 1 if all of the C89 standard headers exist (not just the ones
+   required in a freestanding environment). This macro is provided for
+   backward compatibility; new code need not use it. */
 #undef STDC_HEADERS
 
 /* Version number of package */
 #undef VERSION
 
-/* Define to empty if `const' does not conform to ANSI C. */
+/* Define to empty if 'const' does not conform to ANSI C. */
 #undef const
 
-/* Define to `int' if <sys/types.h> does not define. */
+/* Define as a signed integer type capable of holding a process identifier. */
 #undef pid_t
 
-/* Define to `unsigned int' if <sys/types.h> does not define. */
+/* Define as 'unsigned int' if <stddef.h> doesn't define. */
 #undef size_t
