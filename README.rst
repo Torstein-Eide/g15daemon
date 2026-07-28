@@ -93,6 +93,36 @@ Options
 |                  | Default is to set backlight globally (keyboard default).                        |
 +------------------+---------------------------------------------------------------------------------+
 
+===================
+Systemd integration
+===================
+
+When built with libsystemd available (soft-optional - the daemon still
+builds and runs fine without it), g15daemon reports live status via
+``sd_notify()``, so ``systemctl status g15daemon`` shows version, uptime,
+connected client count, the foreground client, and LCD draw timing instead
+of a bare "running". A watchdog ping keeps systemd from silently believing
+a hung daemon is still healthy.
+
+For this to actually take effect, the installed unit file needs:
+
+- ``NotifyAccess=main`` - systemd's own default is ``none``, which silently
+  discards every status update.
+- ``WatchdogSec=30`` (or similar) - enables the watchdog ping.
+- ``AmbientCapabilities=CAP_SYS_PTRACE`` and
+  ``CapabilityBoundingSet=CAP_SYS_PTRACE CAP_SETUID CAP_SETGID`` - lets
+  g15daemon resolve a connected client's process name (shown in the status
+  line and logged on connect/disconnect) after it drops root to ``nobody``.
+  ``CAP_SETUID``/``CAP_SETGID`` must stay in that list alongside
+  ``CAP_SYS_PTRACE``: the bounding set is a replacement, not an addition,
+  and g15daemon needs those two to perform the privilege drop itself.
+
+``contrib/init/g15daemon.service`` in this repo has all of the above. Note
+that ``make install`` does **not** install the systemd unit - if your distro
+package ships its own copy (as Debian's does), you'll need to copy this
+repo's version over it yourself and run ``systemctl daemon-reload`` for
+these settings to apply.
+
 =======
 FreeBSD
 =======

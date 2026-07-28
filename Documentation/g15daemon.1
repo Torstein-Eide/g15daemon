@@ -37,6 +37,27 @@ to have the MR key as the client screen switch.
 If all required libraries are installed and in locations known to your operating system, the daemon will slip quietly into the background and a clock will appear on the LCD.  
 Congratulations!  The linux kernel will now output keycodes for all your extra keys.
 
+.SH "SYSTEMD INTEGRATION"
+When built with libsystemd available, g15daemon calls \fBsd_notify\fR(3) to
+report live status - \fBsystemctl status g15daemon\fR shows version,
+uptime, connected client count, the current foreground client, and LCD
+draw timing, and a periodic watchdog ping lets systemd detect a hung
+daemon. This requires the installed unit to set \fBNotifyAccess=main\fR
+(systemd's default of \fBnone\fR silently discards status updates) and
+\fBWatchdogSec=\fR.
+.P
+Resolving a connected client's process name (used in the status line and
+in a "Registered clients" log line on connect/disconnect) requires
+\fBCAP_SYS_PTRACE\fR once g15daemon has dropped root to run as \fBnobody\fR,
+granted via \fBAmbientCapabilities=\fR/\fBCapabilityBoundingSet=\fR in the
+unit. \fBCAP_SETUID\fR and \fBCAP_SETGID\fR must remain in the bounding set
+alongside it, since g15daemon needs them for that same privilege drop and
+\fBCapabilityBoundingSet=\fR replaces rather than extends the default set.
+Without \fBCAP_SYS_PTRACE\fR, client names fall back to
+\fB"peer <ip>:<port>"\fR rather than failing.
+.P
+See \fBcontrib/init/g15daemon.service\fR in the source distribution for a
+unit file with all of the above already set.
 .SH "Using the keys in X11"
 Current versions of the Xorg Xserver dont have support for the extra keys that g15daemon provides.  This support will be available in the next release of Xorg (7.2).
 

@@ -54,6 +54,29 @@ G15Daemon(1)                           1                          G15Daemon(1)
        will now output keycodes for all your extra keys.
 
 
+[1mSYSTEMD INTEGRATION[0m
+       When  built with libsystemd available, g15daemon calls sd_notify(3) to
+       report live status - systemctl status g15daemon shows version, uptime,
+       connected  client  count, the current foreground client, and LCD draw
+       timing, and a periodic watchdog ping lets systemd detect a hung  dae-
+       mon.  This  requires  the  installed unit to set NotifyAccess=main
+       (systemd's default of none silently discards status updates) and
+       WatchdogSec=.
+
+       Resolving a connected client's process name (used in the status line
+       and  in  a  "Registered clients" log line on connect/disconnect) re-
+       quires CAP_SYS_PTRACE once g15daemon has dropped root to run as  no-
+       body,  granted  via AmbientCapabilities=/CapabilityBoundingSet= in the
+       unit. CAP_SETUID and CAP_SETGID must remain in the bounding set along-
+       side it, since g15daemon needs them for that same privilege drop and
+       CapabilityBoundingSet= replaces rather than extends the default set.
+       Without CAP_SYS_PTRACE, client names fall back to "peer <ip>:<port>"
+       rather than failing.
+
+       See contrib/init/g15daemon.service in the source distribution for a
+       unit file with all of the above already set.
+
+
 [1mUsing the keys in X11[0m
        Current versions of the Xorg Xserver dont have support  for  the  extra
        keys  that  g15daemon  provides.  This support will be available in the
