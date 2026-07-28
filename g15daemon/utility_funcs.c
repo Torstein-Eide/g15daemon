@@ -70,8 +70,13 @@ void *g15daemon_xmalloc(size_t size) {
 
 static int refresh_pending=0;
 void g15daemon_init_refresh() {
-	pthread_condattr_t attr;
-	pthread_cond_init(&lcd_refresh, &attr);
+	/* NULL -> default attributes (CLOCK_REALTIME), matching the time()-based
+	 * absolute timeout g15daemon_wait_refresh() builds below. Previously
+	 * passed an uninitialized local pthread_condattr_t here, which is
+	 * undefined behavior and could select an inconsistent/wrong clock,
+	 * making pthread_cond_timedwait()'s 1-second retry loop fire at
+	 * unpredictable intervals instead. */
+	pthread_cond_init(&lcd_refresh, NULL);
 }
 
 void g15daemon_send_refresh(lcd_t *lcd) {
@@ -220,9 +225,15 @@ int uf_read_keypresses(unsigned int *keypresses, unsigned int timeout){
 	#ifdef LIBUSB_BLOCKS
 		retval = getPressedKeys(keypresses, timeout);
 	#else
-		pthread_mutex_lock(&g15lib_mutex);
+		/* Uses g15keys_mutex, not g15lib_mutex: this call blocks for up to
+		 * `timeout` inside poll() while holding its lock, and is called in a
+		 * near-continuous retry loop by keyboard_watch_thread whenever idle.
+		 * Sharing g15lib_mutex with LCD/LED writes let that starve them for
+		 * seconds. Keys (evdev) and LCD/LED (fbdev/sysfs) are independent
+		 * kernel devices now, so no serialization is needed between them. */
+		pthread_mutex_lock(&g15keys_mutex);
 		retval = getPressedKeys(keypresses, timeout);
-		pthread_mutex_unlock(&g15lib_mutex);
+		pthread_mutex_unlock(&g15keys_mutex);
 	#endif
 	return retval;
 }

@@ -213,6 +213,14 @@ static g15daemon_s;
 
 static pthread_mutex_t lcdlist_mutex;
 static pthread_mutex_t g15lib_mutex;
+/* Separate mutex for keypress reads: uf_read_keypresses() polls with a
+ * timeout and holds its mutex for the full poll duration, so sharing
+ * g15lib_mutex with LCD/LED writes let keyboard_watch_thread's near-
+ * continuous idle polling starve the LCD-writing thread for seconds at a
+ * time (glibc mutexes aren't FIFO-fair). Keys and LCD/LED content now live
+ * on independent kernel devices (evdev vs fbdev/sysfs), so there is no
+ * correctness reason to serialize them against each other. */
+static pthread_mutex_t g15keys_mutex;
 
 /* server hello */
 #define SERV_HELO "G15 daemon HELLO"

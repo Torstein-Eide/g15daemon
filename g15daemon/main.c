@@ -185,8 +185,13 @@ static void *keyboard_watch_thread(void *lcdlist){
 
 	while (!leaving) {
 		retval = uf_read_keypresses(&keypresses, 20);
-		/* every 2nd packet contains the codes we want.. immediately try again */
-		while (retval == G15_ERROR_TRY_AGAIN){
+		/* every 2nd packet contains the codes we want.. immediately try again.
+		 * G15_ERROR_TRY_AGAIN is the normal result whenever no key was
+		 * pressed in the last poll window, so this loop runs almost
+		 * continuously when idle - it must check leaving or SIGTERM never
+		 * gets noticed and pthread_join() on this thread hangs forever
+		 * at shutdown. */
+		while (retval == G15_ERROR_TRY_AGAIN && !leaving){
 			retval = uf_read_keypresses(&keypresses, 20);
 		}
 		if(retval == G15_NO_ERROR && lastkeys != keypresses) {
@@ -464,6 +469,7 @@ int main (int argc, char *argv[]) {
 		/* initialise the pthread condition for the LCD thread */
 		g15daemon_init_refresh();
 		pthread_mutex_init(&g15lib_mutex, NULL);
+		pthread_mutex_init(&g15keys_mutex, NULL);
 		pthread_attr_init(&attr);
 		pthread_attr_setstacksize(&attr,512*1024); /* set stack to 512k - dont need 8Mb !! */
 		if (pthread_create(&keyboard_thread, &attr, keyboard_watch_thread, lcdlist) != 0) {
