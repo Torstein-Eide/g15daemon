@@ -209,12 +209,12 @@ static int draw_analog(g15canvas *c){
 	char mon[32];	// March
 	char year[32];	// 1234 AD
 	char time[32];	// 22:33:44
-	char date[32];	// 21.April
+	char date[sizeof(mon)+4];	// 21.April
 
 	strftime(day, sizeof(day), "%A", t);
 	strftime(mon, sizeof(mon), "%B", t);
-	sprintf(date, "%d.%s", t->tm_mday, mon);
-	sprintf(year, "%4d AD", t->tm_year+1900);
+	snprintf(date, sizeof(date), "%d.%s", t->tm_mday, mon);
+	snprintf(year, sizeof(year), "%4d AD", t->tm_year+1900);
 	if(mode)
 		strftime(time,sizeof(time),"%H:%M:%S",t);
 	else
@@ -255,7 +255,7 @@ static int lcdclock(lcd_t *lcd){
 	memcpy (lcd->buf, canvas->buffer, G15_BUFFER_LEN);
 	g15daemon_send_refresh(lcd);
 	free(canvas);
-	return G15_PLUGIN_OK;
+	return ret;
 }
 
 static int myeventhandler(plugin_event_t *myevent){
