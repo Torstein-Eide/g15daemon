@@ -224,11 +224,13 @@ int g15_plugin_load (g15daemon_t *masterlist, char *filename) {
 			g15daemon_log(LOG_ERR,"%s is not a valid g15daemon plugin.  Unloading\n",filename);
 			g15daemon_dlclose_plugin(plugin_handle);
 			dlerror();
+			free(plugin_args);
 			return -1;
 		}
 		if(strncasecmp("Load",g15daemon_cfg_read_string(plugin_cfg, plugin_args->info->name,"Load"),5)!=0){
 			g15daemon_log(LOG_ERR, "\"%s\" Plugin disabled in g15daemon.conf - not running\n",plugin_args->info->name);
 			g15daemon_dlclose_plugin(plugin_handle);
+			free(plugin_args);
 			return -1;
 		}
 		g15daemon_log(LOG_WARNING, "Booting plugin \"%s\"",plugin_args->info->name);
