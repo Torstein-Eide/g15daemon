@@ -154,76 +154,83 @@ void keydown(unsigned char code) { printf("Extra Keys not supported due to missi
 
 static void g15_process_keys(g15daemon_t *masterlist, unsigned int currentkeys, unsigned int lastkeys){
 	/* 'G' keys */
-	if((currentkeys & G15_KEY_G1) && !(lastkeys & G15_KEY_G1))
+	if((currentkeys & G15_KEY_G1) && !(lastkeys & G15_KEY_G1)) {
 		if(currentkeys & G15_KEY_LIGHT)
 			keydown(164);
 		else
 			keydown(GKEY_OFFSET);
-	else if(!(currentkeys & G15_KEY_G1) && (lastkeys & G15_KEY_G1))
+	} else if(!(currentkeys & G15_KEY_G1) && (lastkeys & G15_KEY_G1)) {
 		if(lastkeys & G15_KEY_LIGHT)
 			keyup(164);
 		else
 			keyup(GKEY_OFFSET);
-	if((currentkeys & G15_KEY_G2) && !(lastkeys & G15_KEY_G2))
+	}
+	if((currentkeys & G15_KEY_G2) && !(lastkeys & G15_KEY_G2)) {
 		if(currentkeys & G15_KEY_LIGHT)
 			keydown(166);
 		else
 			keydown(GKEY_OFFSET+1);
-	else if(!(currentkeys & G15_KEY_G2) && (lastkeys & G15_KEY_G2))
+	} else if(!(currentkeys & G15_KEY_G2) && (lastkeys & G15_KEY_G2)) {
 		if(lastkeys & G15_KEY_LIGHT)
 			keyup(166);
 		else
 			keyup(GKEY_OFFSET+1);
-	if((currentkeys & G15_KEY_G3) && !(lastkeys & G15_KEY_G3))
+	}
+	if((currentkeys & G15_KEY_G3) && !(lastkeys & G15_KEY_G3)) {
 		if(currentkeys & G15_KEY_LIGHT)
 			keydown(165);
 		else
 			keydown(GKEY_OFFSET+2);
-	else if(!(currentkeys & G15_KEY_G3) && (lastkeys & G15_KEY_G3))
+	} else if(!(currentkeys & G15_KEY_G3) && (lastkeys & G15_KEY_G3)) {
 		if(lastkeys & G15_KEY_LIGHT)
 			keyup(165);
 		else
 			keyup(GKEY_OFFSET+2);
-	if((currentkeys & G15_KEY_G4) && !(lastkeys & G15_KEY_G4))
+	}
+	if((currentkeys & G15_KEY_G4) && !(lastkeys & G15_KEY_G4)) {
 		if(currentkeys & G15_KEY_LIGHT)
 			keydown(163);
 		else
 			keydown(GKEY_OFFSET+3);
-	else if(!(currentkeys & G15_KEY_G4) && (lastkeys & G15_KEY_G4))
+	} else if(!(currentkeys & G15_KEY_G4) && (lastkeys & G15_KEY_G4)) {
 		if(lastkeys & G15_KEY_LIGHT)
 			keyup(163);
 		else
 			keyup(GKEY_OFFSET+3);
-	if((currentkeys & G15_KEY_G5) && !(lastkeys & G15_KEY_G5))
+	}
+	if((currentkeys & G15_KEY_G5) && !(lastkeys & G15_KEY_G5)) {
 		if(currentkeys & G15_KEY_LIGHT)
 			keydown(113);
 		else
 			keydown(GKEY_OFFSET+4);
-	else if(!(currentkeys & G15_KEY_G5) && (lastkeys & G15_KEY_G5))
+	} else if(!(currentkeys & G15_KEY_G5) && (lastkeys & G15_KEY_G5)) {
 		if(lastkeys & G15_KEY_LIGHT)
 			keyup(113);
 		else
 			keyup(GKEY_OFFSET+4);
-	if((currentkeys & G15_KEY_G6) && !(lastkeys & G15_KEY_G6))
+	}
+	if((currentkeys & G15_KEY_G6) && !(lastkeys & G15_KEY_G6)) {
 		if(currentkeys & G15_KEY_LIGHT)
 			keydown(115);
 		else
 			keydown(GKEY_OFFSET+5);
-	else if(!(currentkeys & G15_KEY_G6) && (lastkeys & G15_KEY_G6))
+	} else if(!(currentkeys & G15_KEY_G6) && (lastkeys & G15_KEY_G6)) {
 		if(lastkeys & G15_KEY_LIGHT)
 			keyup(115);
 		else
 			keyup(GKEY_OFFSET+5);
-	if((currentkeys & G15_KEY_G7) && !(lastkeys & G15_KEY_G7))
+	}
+	if((currentkeys & G15_KEY_G7) && !(lastkeys & G15_KEY_G7)) {
 		if(currentkeys & G15_KEY_LIGHT)
 			keydown(114);
 		else
 			keydown(GKEY_OFFSET+6);
-	else if(!(currentkeys & G15_KEY_G7) && (lastkeys & G15_KEY_G7))
+	} else if(!(currentkeys & G15_KEY_G7) && (lastkeys & G15_KEY_G7)) {
 		if(lastkeys & G15_KEY_LIGHT)
 			keyup(114);
 		else
 			keyup(GKEY_OFFSET+6);
+	}
 	if((currentkeys & G15_KEY_G8) && !(lastkeys & G15_KEY_G8))
 		keydown(GKEY_OFFSET+7);
 	else if(!(currentkeys & G15_KEY_G8) && (lastkeys & G15_KEY_G8))
