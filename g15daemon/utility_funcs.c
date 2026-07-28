@@ -151,7 +151,8 @@ int uf_create_pidfile() {
 		return 1;
 	}
 	snprintf(pidtxt, sizeof(pidtxt), "%lu\n", (unsigned long) getpid());
-	if (write(fd, pidtxt, l = strlen(pidtxt)) != l) {
+	l = strlen(pidtxt);
+	if ((size_t)write(fd, pidtxt, l) != l) {
 		g15daemon_log(LOG_WARNING, "write(): %s", strerror(errno));
 		unlink(G15DAEMON_PIDFILE);
 	}
