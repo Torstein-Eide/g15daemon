@@ -11,8 +11,8 @@ endif
 
 lib_LTLIBRARIES = ${input_la} g15plugin_tcpserver.la g15plugin_clock.la
 
-g15plugin_tcpserver_la_SOURCES = g15_plugin_net.c
-g15plugin_tcpserver_la_LDFLAGS = -avoid-version -module 
+g15plugin_tcpserver_la_SOURCES = g15_plugin_net.c ../g15daemon/peer_ident.c ../g15daemon/peer_ident.h
+g15plugin_tcpserver_la_LDFLAGS = -avoid-version -module
 
 g15plugin_clock_la_SOURCES = g15_plugin_clock.c
 g15plugin_clock_la_LDFLAGS = -avoid-version -module 

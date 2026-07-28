@@ -42,6 +42,7 @@
 #include <errno.h>
 #include <libg15.h>
 #include <g15daemon.h>
+#include "peer_ident.h"
 
 static int leaving = 0;
 static int server_events(plugin_event_t *myevent);
@@ -127,6 +128,44 @@ static void process_client_cmds(lcdnode_t *lcdnode, int sock, unsigned int *msgb
 			lcdnode->lcd->state_changed = 1;
 		}
 	}
+}
+
+/* Logs the full connected-client list at LOG_INFO, foreground one marked -
+ * called on every connect/disconnect (natural trigger points) rather than
+ * on a timer. Full list goes to the log (unbounded); the one-line
+ * sd_notify STATUS= just shows the foreground app and client count, kept
+ * short per `systemctl status` conventions. The list is a circular
+ * doubly-linked list (masterlist->tail is the built-in clock/menu node,
+ * masterlist->head is the most recently connected client) - walk from
+ * tail via ->next for numclients+1 steps to visit every node once. */
+static void log_client_list(g15daemon_t *masterlist) {
+	char list[512];
+	size_t used = 0;
+	lcdnode_t *node;
+	unsigned long remaining;
+
+	list[0] = '\0';
+	pthread_mutex_lock(&lcdlist_mutex);
+	node = masterlist->tail;
+	remaining = masterlist->numclients + 1;
+	while (remaining-- > 0 && used < sizeof(list) - 1) {
+		const char *name = node->lcd->client_name[0] ? node->lcd->client_name : "clock";
+		int n = snprintf(list + used, sizeof(list) - used, "%s%s%s",
+				  used ? ", " : "", name,
+				  node == masterlist->current ? " (fg)" : "");
+		if (n > 0)
+			used += (size_t)n;
+		node = node->next;
+	}
+	pthread_mutex_unlock(&lcdlist_mutex);
+
+	/* LOG_INFO is semantically correct here (this isn't a warning
+	 * condition) - it means this line is silent by default unless -d
+	 * raises verbosity, same as g15daemon's other LOG_INFO lines. Live
+	 * status (foreground app, client count) is covered independently via
+	 * sd_notify's STATUS= line, always visible in `systemctl status`
+	 * regardless of -d - this log line is the full-detail counterpart. */
+	g15daemon_log(LOG_INFO, "Registered clients: %s\n", list);
 }
 
 /* create and open a socket for listening */
@@ -312,7 +351,14 @@ exitthread:
 		client_lcd->masterlist->remote_keyhandler_sock=0;
 	close(client_sock);
 		free(tmpbuf);
-		g15daemon_lcdnode_remove(display);
+		{
+			/* client_lcd is freed inside lcdnode_remove(), so capture the
+			 * masterlist pointer for the post-removal client-list log
+			 * before that happens. */
+			g15daemon_t *masterlist = client_lcd->masterlist;
+			g15daemon_lcdnode_remove(display);
+			log_client_list(masterlist);
+		}
 		pthread_exit(NULL);
 }
 
@@ -344,6 +390,11 @@ static int g15_clientconnect (g15daemon_t **g15daemon, int listening_socket) {
 	clientnode->lcd->connection = conn_s;
 	/* override the default (generic handler and use our own for our clients */
 	clientnode->lcd->g15plugin->info=(void*)(&lcdclient_info);
+
+	g15_resolve_peer_name(conn_s, clientnode->lcd->client_name, sizeof(clientnode->lcd->client_name));
+	clock_gettime(CLOCK_MONOTONIC, &clientnode->lcd->connected_at);
+	(*g15daemon)->total_clients_connected++;
+	log_client_list(*g15daemon);
 
 	memset(&attr,0,sizeof(pthread_attr_t));
 	pthread_attr_init(&attr);
