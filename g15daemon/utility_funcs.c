@@ -328,14 +328,19 @@ int uf_conf_write(g15daemon_t *list,char *filename){
 	char line[1024];
 	config_fd = open(filename,O_CREAT|O_RDWR|O_TRUNC, 0644);
 	if(config_fd){
+		size_t len;
 		snprintf(line,1024,"# G15Daemon Configuration File\n# any items entered before a [section] header\n# will be in the Global config space\n# comments you wish to keep should start with a semicolon';'\n");
-		write(config_fd,line,strlen(line));
+		len = strlen(line);
+		if((size_t)write(config_fd,line,len) != len)
+			g15daemon_log(LOG_WARNING, "uf_conf_write(): %s", strerror(errno));
 		while(foo!=NULL){
 			item=foo->items;
 			memset(line,0,1024);
 			if(foo->sectionname!=NULL){
 				snprintf(line,1024,"\n[%s]\n",foo->sectionname);
-				write(config_fd,line,strlen(line));
+				len = strlen(line);
+				if((size_t)write(config_fd,line,len) != len)
+					g15daemon_log(LOG_WARNING, "uf_conf_write(): %s", strerror(errno));
 				while(item!=NULL){
 					memset(line,0,1024);
 					if(item->key!=NULL){
@@ -343,7 +348,9 @@ int uf_conf_write(g15daemon_t *list,char *filename){
 						snprintf(line,1024,"%s\n",item->key);
 					else
 						snprintf(line,1024,"%s: %s\n",item->key, item->value);
-					write(config_fd,line,strlen(line));
+					len = strlen(line);
+					if((size_t)write(config_fd,line,len) != len)
+						g15daemon_log(LOG_WARNING, "uf_conf_write(): %s", strerror(errno));
 					}
 					item=item->next;
 				}
