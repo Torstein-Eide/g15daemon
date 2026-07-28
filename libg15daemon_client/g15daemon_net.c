@@ -200,12 +200,11 @@ int g15_recv_oob_answer(int sock) {
 	int msgret = 0;
 	struct pollfd pfd[1];
 	memset(pfd,0,sizeof(pfd));
-	memset(packet,0,2);
+	memset(packet,0,sizeof(packet));
 	pfd[0].fd = sock;
 	pfd[0].events = POLLPRI | POLLERR | POLLHUP | POLLNVAL;
 	if(poll(pfd,1,100)>0){
 		if(pfd[0].revents & POLLPRI && !(pfd[0].revents & POLLERR || pfd[0].revents & POLLHUP || pfd[0].revents & POLLNVAL)) {
-			memset(packet,0,sizeof(packet));
 			msgret = recv(sock, packet, sizeof(packet) , MSG_OOB);
 			if (msgret < 1) {
 				return -1;
