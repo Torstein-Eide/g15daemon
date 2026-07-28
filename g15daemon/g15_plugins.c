@@ -195,9 +195,7 @@ int g15_count_plugins(char *plugin_directory) {
 	if (directory != NULL){
 		while ((ep = readdir (directory))) {
 			if(strstr(ep->d_name,".so")){
-				strcpy(pluginname, plugin_directory);
-				strncat(pluginname,"/",1);
-				strncat(pluginname,ep->d_name,200);
+				snprintf(pluginname,sizeof(pluginname),"%s/%s",plugin_directory,ep->d_name);
 				++count;
 			}
 		}
@@ -290,12 +288,10 @@ int g15_open_all_plugins(g15daemon_t *masterlist, char *plugin_directory) {
 			g15daemon_log(LOG_WARNING,"Attempting load of %i plugins",count);
 			while ((ep = readdir (directory))) {
 				if(strstr(ep->d_name,".so")){
-					strcpy(pluginname, plugin_directory);
-					strncat(pluginname,"/",1);
-					strncat(pluginname,ep->d_name,200);
+					snprintf(pluginname,sizeof(pluginname),"%s/%s",plugin_directory,ep->d_name);
 					if(g15_plugin_load (masterlist, pluginname)==0){
-						char tmp[10];
-						sprintf(tmp,"%i",loadcount);
+						char tmp[16];
+						snprintf(tmp,sizeof(tmp),"%i",loadcount);
 						g15daemon_cfg_write_string(load_cfg,tmp,ep->d_name);
 						loadcount++;
 					}
@@ -314,12 +310,10 @@ int g15_open_all_plugins(g15daemon_t *masterlist, char *plugin_directory) {
 	int i;
 		g15daemon_log(LOG_INFO,"Loading %i plugins named in g15daemon.conf.",count);
 		for(i=0;i<count;i++){
-			char tmp[10];
+			char tmp[16];
 			char plugin_fname[1024];
-			sprintf(tmp,"%i",i);
-			strcpy(plugin_fname,PLUGINDIR);
-			strncat(plugin_fname,"/",1);
-			strncat(plugin_fname,g15daemon_cfg_read_string(load_cfg,tmp,""),128);
+			snprintf(tmp,sizeof(tmp),"%i",i);
+			snprintf(plugin_fname,sizeof(plugin_fname),"%s/%s",PLUGINDIR,g15daemon_cfg_read_string(load_cfg,tmp,""));
 			g15_plugin_load(masterlist,plugin_fname);
 			g15daemon_msleep(20);
 		}
