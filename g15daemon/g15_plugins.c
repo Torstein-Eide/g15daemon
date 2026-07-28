@@ -241,12 +241,27 @@ int g15_plugin_load (g15daemon_t *masterlist, char *filename) {
 		if(plugin_args->type == G15_PLUGIN_LCD_CLIENT) {
 			//g15daemon_t *foolist = (g15daemon_t*)*masterlist;
 			/* FIXME we should just sort out the linked list stuff instead of overriding it */
-			if((int)masterlist->numclients>0){
+			/* whether the placeholder tail node from ll_lcdlist_init() is still
+			 * unclaimed must be judged by its own state (info==NULL), not by
+			 * numclients - a TCP client can connect and increment numclients
+			 * (g15daemon_lcdnode_add(), from the net plugin's accept thread)
+			 * before this LCD_CLIENT plugin (normally Clock) finishes loading,
+			 * since plugins after the net plugin in PLUGIN_LOAD_ORDER race its
+			 * already-running accept thread. Getting this wrong permanently
+			 * strands the placeholder in the list with a NULL info pointer;
+			 * once keyboard cycling rotates onto it, g15daemon_send_event()
+			 * dereferences lcd->g15plugin->info->event_handler and crashes -
+			 * confirmed via coredump (info/masterlist/type/plugin_handle/args
+			 * all still zero, current_screen == masterlist->tail). */
+			pthread_mutex_lock(&lcdlist_mutex);
+			if(masterlist->tail->lcd->g15plugin->info != NULL){
+				pthread_mutex_unlock(&lcdlist_mutex);
 				clientnode = g15daemon_lcdnode_add(&masterlist);
 			}
 			else {
 				clientnode = masterlist->tail;
 				masterlist->numclients++;
+				pthread_mutex_unlock(&lcdlist_mutex);
 			}
 			plugin_args->plugin_handle = plugin_handle;
 			memcpy(clientnode->lcd->g15plugin,plugin_args,sizeof(plugin_s));
