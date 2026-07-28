@@ -489,8 +489,10 @@ int main (int argc, char *argv[]) {
 		 * other LOG_INFO lines. */
 		g15daemon_log(LOG_INFO,"initLibG15() took %.2f ms\n", g15_timer_ms(&phase));
 	}
-	if(!g15daemon_debug)
-		daemon(0,0);
+	if(!g15daemon_debug && daemon(0,0) != 0) {
+		g15daemon_log(LOG_ERR,"Unable to daemonize: %s",strerror(errno));
+		exit(1);
+	}
 	if(uf_create_pidfile() == 0) {
 		g15daemon_t *lcdlist;
 		config_section_t *global_cfg=NULL;
@@ -531,8 +533,10 @@ int main (int argc, char *argv[]) {
 #ifndef OSTYPE_SOLARIS
 		/* all other processes/threads should be seteuid nobody */
 		if(nobody!=NULL) {
-			seteuid(nobody->pw_uid);
-			setegid(nobody->pw_gid);
+			if(setegid(nobody->pw_gid) != 0 || seteuid(nobody->pw_uid) != 0) {
+				g15daemon_log(LOG_ERR,"Unable to drop privileges to uid %i: %s",nobody->pw_uid,strerror(errno));
+				exit(1);
+			}
 		}
 #endif
 		/* initialise the pthread condition for the LCD thread */
@@ -612,8 +616,8 @@ int main (int argc, char *argv[]) {
 
 	exitnow:
 		/* return to root privilages for the final countdown */
-		seteuid(0);
-		setegid(0);
+		if(seteuid(0) != 0 || setegid(0) != 0)
+			g15daemon_log(LOG_WARNING,"Unable to restore root privileges during shutdown: %s",strerror(errno));
 		closelog();
 		g15daemon_quit_refresh();
 		uf_conf_write(lcdlist,"/etc/g15daemon.conf");
