@@ -239,7 +239,7 @@ static int g15_recv(lcdnode_t *lcdnode, int sock, char *buf, unsigned int len){
 		if(poll(pfd,1,500)>0){
 			if(pfd[0].revents & POLLPRI && !(pfd[0].revents & POLLERR || pfd[0].revents & POLLHUP || pfd[0].revents & POLLNVAL)) {
 			/* receive out-of-band request from client and deal with it */
-			memset(msgbuf,0,20);
+			memset(msgbuf,0,sizeof(msgbuf));
 			msgret = recv(sock, msgbuf, 10 , MSG_OOB);
 				if (msgret < 1) {
 					break;
