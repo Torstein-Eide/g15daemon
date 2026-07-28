@@ -61,8 +61,10 @@ static int g15_init_uinput(void *plugin_args) {
 	uinput_cfg = g15daemon_cfg_load_section(masterlist,"Keyboard OS Mapping (uinput)");
 	custom_filename = g15daemon_cfg_read_string(uinput_cfg, "device",(char*)uinput_device_fn[1]);
 	map_Lkeys=g15daemon_cfg_read_int(uinput_cfg, "Lkeys.mapped",0);
-	seteuid(0);
-	setegid(0);
+	if(seteuid(0) != 0 || setegid(0) != 0) {
+		g15daemon_log(LOG_ERR,"Unable to regain root privileges to open UINPUT device: %s",strerror(errno));
+		return -1;
+	}
 	while (uinput_device_fn[i] && (uinp_fd = open(uinput_device_fn[i],O_RDWR))<0){
 		++i;
 	}
@@ -74,8 +76,10 @@ static int g15_init_uinput(void *plugin_args) {
 		return -1;
 	}
 	/* all other processes/threads should be seteuid nobody */
-	seteuid(masterlist->nobody->pw_uid);
-	setegid(masterlist->nobody->pw_gid);
+	if(setegid(masterlist->nobody->pw_gid) != 0 || seteuid(masterlist->nobody->pw_uid) != 0) {
+		g15daemon_log(LOG_ERR,"Unable to drop privileges to uid %i: %s",masterlist->nobody->pw_uid,strerror(errno));
+		return -1;
+	}
 
 	memset(&uinp,0,sizeof(uinp));
 	strncpy(uinp.name, "G15 Extra Keys", UINPUT_MAX_NAME_SIZE);
@@ -93,7 +97,10 @@ static int g15_init_uinput(void *plugin_args) {
 	for (i=0; i<256; ++i)
 		ioctl(uinp_fd, UI_SET_KEYBIT, i);
 
-	write(uinp_fd, &uinp, sizeof(uinp));
+	if(write(uinp_fd, &uinp, sizeof(uinp)) != sizeof(uinp)) {
+		g15daemon_log(LOG_ERR,"Unable to write UINPUT device descriptor: %s",strerror(errno));
+		return -1;
+	}
 
 	if (ioctl(uinp_fd, UI_DEV_CREATE)){
 		g15daemon_log(LOG_ERR,"Unable to create UINPUT device.");
@@ -115,14 +122,16 @@ static void g15_uinput_keydown(unsigned char code){
 	event.code = code;
 	event.value = G15KEY_DOWN;
 
-	write (uinp_fd, &event, sizeof(event));
+	if(write (uinp_fd, &event, sizeof(event)) != sizeof(event))
+		g15daemon_log(LOG_WARNING,"UINPUT keydown write failed: %s",strerror(errno));
 
 	/* Need to write sync event */
 	memset(&event, 0, sizeof(event));
 	event.type = EV_SYN;
 	event.code = SYN_REPORT;
 	event.value = 0;
-	write(uinp_fd, &event, sizeof(event));
+	if(write(uinp_fd, &event, sizeof(event)) != sizeof(event))
+		g15daemon_log(LOG_WARNING,"UINPUT sync write failed: %s",strerror(errno));
 
 }
 
@@ -134,14 +143,16 @@ static void g15_uinput_keyup(unsigned char code){
 	event.code = code;
 	event.value = G15KEY_UP;
 
-	write (uinp_fd, &event, sizeof(event));
+	if(write (uinp_fd, &event, sizeof(event)) != sizeof(event))
+		g15daemon_log(LOG_WARNING,"UINPUT keyup write failed: %s",strerror(errno));
 
 	/* Need to write sync event */
 	memset(&event, 0, sizeof(event));
 	event.type = EV_SYN;
 	event.code = SYN_REPORT;
 	event.value = 0;
-	write(uinp_fd, &event, sizeof(event));
+	if(write(uinp_fd, &event, sizeof(event)) != sizeof(event))
+		g15daemon_log(LOG_WARNING,"UINPUT sync write failed: %s",strerror(errno));
 }
 
 void (*keyup)(unsigned char code) = &g15_uinput_keyup;
