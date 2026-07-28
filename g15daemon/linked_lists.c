@@ -138,6 +138,19 @@ void g15daemon_lcdnode_remove (lcdnode_t *oldnode) {
 	masterlist = &oldnode->list;
 	prev = &oldnode->prev;
 	next = &oldnode->next;
+	/* clear any other node's last_priority pointing at oldnode - otherwise
+	 * it's left dangling once oldnode is freed below, and a later
+	 * G15_EVENT_REQ_PRIORITY on that node can write the stale pointer into
+	 * masterlist->current, causing a use-after-free crash far away from
+	 * here (see keyboard_watch_thread/g15daemon_lcdnode_cycle). */
+	{
+		lcdnode_t *scan = oldnode->next;
+		while(scan != oldnode) {
+			if(scan->last_priority == oldnode)
+				scan->last_priority = NULL;
+			scan = scan->next;
+		}
+	}
 	ll_quit_lcd(oldnode->lcd);
 	(*masterlist)->numclients--;
 	if((*masterlist)->current == oldnode) {

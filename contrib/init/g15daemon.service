@@ -8,6 +8,8 @@ Documentation=man:g15daemon(1)
 Type=forking
 PIDFile=/run/g15daemon.pid
 ExecStart=/usr/sbin/g15daemon
+Restart=on-failure
+RestartSec=2
 # g15daemon still calls sd_notify() for READY=1/STATUS=/WATCHDOG=1 even
 # though Type=forking doesn't require it: NotifyAccess=main accepts
 # notifications from whatever PID the PIDFile above resolves to once
