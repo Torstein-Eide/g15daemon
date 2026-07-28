@@ -1,3 +1,10 @@
+STALE: kept for historical reference only. libg15 (a hard dependency of
+g15daemon) was rewritten to talk directly to the Linux kernel's
+hid-lg-g15 HID driver (sysfs/fbdev/evdev, no libusb) and its configure
+script now hard-errors on any non-Linux $host_os - see the "Breaking
+change" section in libg15's own README.rst. g15daemon can no longer
+actually be built on FreeBSD as a result, regardless of the steps below.
+
 You need to set evdev to deal with events instead of kbdmux
 so add this to your /boot/loader.conf.local:
 

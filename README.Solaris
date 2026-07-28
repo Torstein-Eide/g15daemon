@@ -1,4 +1,13 @@
 *************************************************************************************************
+STALE: kept for historical reference only. libg15 (a hard dependency of
+g15daemon) was rewritten to talk directly to the Linux kernel's
+hid-lg-g15 HID driver (sysfs/fbdev/evdev, no libusb) and its configure
+script now hard-errors on any non-Linux $host_os - see the "Breaking
+change" section in libg15's own README.rst. g15daemon can no longer
+actually be built on Solaris as a result, regardless of the packages/
+instructions below.
+*************************************************************************************************
+
 Solaris 10+ support is here as of Jan-1-2008
 
 	G15 Daemon 1.9.4
