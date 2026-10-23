@@ -113,14 +113,12 @@ static void process_client_cmds(lcdnode_t *lcdnode, int sock, unsigned int *msgb
 			lcdnode->list->remote_keyhandler_sock = sock;
 			g15daemon_log(LOG_WARNING, "Client has taken over keystate");
 		}
-		else if (msgbuf[0] & CLIENT_CMD_BACKLIGHT){
-			unsigned char retval = lcdnode->lcd->backlight_state;
+		else if (msgbuf[0] & CLIENT_CMD_BACKLIGHT){ /* global, not per-client - see g15daemon_set_backlight() */
+			unsigned char retval = g15daemon_set_backlight(lcdnode->list, G15_BACKLIGHT_LCD, msgbuf[0]-0x80);
 			send(sock,&retval,1,MSG_OOB);
-			lcdnode->lcd->backlight_state = msgbuf[0]-0x80;
-			lcdnode->lcd->state_changed = 1;
 		}
 		else if (msgbuf[0] & CLIENT_CMD_KB_BACKLIGHT){
-			setKBBrightness((unsigned int)msgbuf[0]-0x8);
+			g15daemon_set_backlight(lcdnode->list, G15_BACKLIGHT_KB, msgbuf[0]-0x8);
 		}
 		else if (msgbuf[0] & CLIENT_CMD_CONTRAST){
 			send(sock,&lcdnode->lcd->contrast_state,1,MSG_OOB);

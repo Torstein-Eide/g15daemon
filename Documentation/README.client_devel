@@ -97,7 +97,8 @@ G15daemon Client Development()                  G15daemon Client Development()
 
 [1mG15Daemon Command Types[0m
        Commands and requests to the daemon are  sent  via  OOB  data  packets.
-       Changes  to  the  backlight and mkey state will only affect the calling
+       Changes to the mkey state will only affect the calling client.  The LCD
+       and keyboard backlights are global: a backlight change applies to every
        client.  The following commands are supported  as  defined  in  g15dae-
        mon_client.h:
 

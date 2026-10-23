@@ -140,6 +140,18 @@ g15plugin_clock_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
 	$(AM_CFLAGS) $(CFLAGS) $(g15plugin_clock_la_LDFLAGS) \
 	$(LDFLAGS) -o $@
+am__DEPENDENCIES_1 =
+@LOGIND_PLUGIN_TRUE@g15plugin_logind_la_DEPENDENCIES =  \
+@LOGIND_PLUGIN_TRUE@	$(am__DEPENDENCIES_1)
+am__g15plugin_logind_la_SOURCES_DIST = g15_plugin_logind.c
+@LOGIND_PLUGIN_TRUE@am_g15plugin_logind_la_OBJECTS =  \
+@LOGIND_PLUGIN_TRUE@	g15plugin_logind_la-g15_plugin_logind.lo
+g15plugin_logind_la_OBJECTS = $(am_g15plugin_logind_la_OBJECTS)
+g15plugin_logind_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
+	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
+	$(g15plugin_logind_la_CFLAGS) $(CFLAGS) \
+	$(g15plugin_logind_la_LDFLAGS) $(LDFLAGS) -o $@
+@LOGIND_PLUGIN_TRUE@am_g15plugin_logind_la_rpath = -rpath $(libdir)
 g15plugin_tcpserver_la_LIBADD =
 am_g15plugin_tcpserver_la_OBJECTS = g15_plugin_net.lo peer_ident.lo
 g15plugin_tcpserver_la_OBJECTS = $(am_g15plugin_tcpserver_la_OBJECTS)
@@ -175,7 +187,9 @@ depcomp = $(SHELL) $(top_srcdir)/config/depcomp
 am__maybe_remake_depfiles = depfiles
 am__depfiles_remade = ./$(DEPDIR)/g15_plugin_clock.Plo \
 	./$(DEPDIR)/g15_plugin_net.Plo \
-	./$(DEPDIR)/g15_plugin_uinput.Plo ./$(DEPDIR)/peer_ident.Plo
+	./$(DEPDIR)/g15_plugin_uinput.Plo \
+	./$(DEPDIR)/g15plugin_logind_la-g15_plugin_logind.Plo \
+	./$(DEPDIR)/peer_ident.Plo
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
@@ -195,10 +209,11 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(g15plugin_clock_la_SOURCES) \
+SOURCES = $(g15plugin_clock_la_SOURCES) $(g15plugin_logind_la_SOURCES) \
 	$(g15plugin_tcpserver_la_SOURCES) \
 	$(g15plugin_uinput_la_SOURCES)
 DIST_SOURCES = $(g15plugin_clock_la_SOURCES) \
+	$(am__g15plugin_logind_la_SOURCES_DIST) \
 	$(g15plugin_tcpserver_la_SOURCES) \
 	$(am__g15plugin_uinput_la_SOURCES_DIST)
 am__can_run_installinfo = \
@@ -240,6 +255,8 @@ CPPFLAGS = @CPPFLAGS@
 CSCOPE = @CSCOPE@
 CTAGS = @CTAGS@
 CYGPATH_W = @CYGPATH_W@
+DBUS_CFLAGS = @DBUS_CFLAGS@
+DBUS_LIBS = @DBUS_LIBS@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DLLTOOL = @DLLTOOL@
@@ -362,7 +379,12 @@ AM_CFLAGS = -Wall -I$(top_builddir)/libg15daemon_client/ -I$(top_builddir)/g15da
 @UINPUT_INTERFACE_PLUGIN_TRUE@g15plugin_uinput_la_SOURCES = g15_plugin_uinput.c
 @UINPUT_INTERFACE_PLUGIN_TRUE@g15plugin_uinput_la_LDFLAGS = -avoid-version -module 
 @UINPUT_INTERFACE_PLUGIN_TRUE@input_la = g15plugin_uinput.la
-lib_LTLIBRARIES = ${input_la} g15plugin_tcpserver.la g15plugin_clock.la
+@LOGIND_PLUGIN_TRUE@g15plugin_logind_la_SOURCES = g15_plugin_logind.c
+@LOGIND_PLUGIN_TRUE@g15plugin_logind_la_CFLAGS = $(AM_CFLAGS) $(DBUS_CFLAGS)
+@LOGIND_PLUGIN_TRUE@g15plugin_logind_la_LIBADD = $(DBUS_LIBS)
+@LOGIND_PLUGIN_TRUE@g15plugin_logind_la_LDFLAGS = -avoid-version -module
+@LOGIND_PLUGIN_TRUE@logind_la = g15plugin_logind.la
+lib_LTLIBRARIES = ${input_la} ${logind_la} g15plugin_tcpserver.la g15plugin_clock.la
 g15plugin_tcpserver_la_SOURCES = g15_plugin_net.c ../g15daemon/peer_ident.c ../g15daemon/peer_ident.h
 g15plugin_tcpserver_la_LDFLAGS = -avoid-version -module
 g15plugin_clock_la_SOURCES = g15_plugin_clock.c
@@ -437,6 +459,9 @@ clean-libLTLIBRARIES:
 g15plugin_clock.la: $(g15plugin_clock_la_OBJECTS) $(g15plugin_clock_la_DEPENDENCIES) $(EXTRA_g15plugin_clock_la_DEPENDENCIES) 
 	$(AM_V_CCLD)$(g15plugin_clock_la_LINK) -rpath $(libdir) $(g15plugin_clock_la_OBJECTS) $(g15plugin_clock_la_LIBADD) $(LIBS)
 
+g15plugin_logind.la: $(g15plugin_logind_la_OBJECTS) $(g15plugin_logind_la_DEPENDENCIES) $(EXTRA_g15plugin_logind_la_DEPENDENCIES) 
+	$(AM_V_CCLD)$(g15plugin_logind_la_LINK) $(am_g15plugin_logind_la_rpath) $(g15plugin_logind_la_OBJECTS) $(g15plugin_logind_la_LIBADD) $(LIBS)
+
 g15plugin_tcpserver.la: $(g15plugin_tcpserver_la_OBJECTS) $(g15plugin_tcpserver_la_DEPENDENCIES) $(EXTRA_g15plugin_tcpserver_la_DEPENDENCIES) 
 	$(AM_V_CCLD)$(g15plugin_tcpserver_la_LINK) -rpath $(libdir) $(g15plugin_tcpserver_la_OBJECTS) $(g15plugin_tcpserver_la_LIBADD) $(LIBS)
 
@@ -452,6 +477,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/g15_plugin_clock.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/g15_plugin_net.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/g15_plugin_uinput.Plo@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/g15plugin_logind_la-g15_plugin_logind.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/peer_ident.Plo@am__quote@ # am--include-marker
 
 $(am__depfiles_remade):
@@ -480,6 +506,13 @@ am--depfiles: $(am__depfiles_remade)
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LTCOMPILE) -c -o $@ $<
+
+g15plugin_logind_la-g15_plugin_logind.lo: g15_plugin_logind.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(g15plugin_logind_la_CFLAGS) $(CFLAGS) -MT g15plugin_logind_la-g15_plugin_logind.lo -MD -MP -MF $(DEPDIR)/g15plugin_logind_la-g15_plugin_logind.Tpo -c -o g15plugin_logind_la-g15_plugin_logind.lo `test -f 'g15_plugin_logind.c' || echo '$(srcdir)/'`g15_plugin_logind.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/g15plugin_logind_la-g15_plugin_logind.Tpo $(DEPDIR)/g15plugin_logind_la-g15_plugin_logind.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='g15_plugin_logind.c' object='g15plugin_logind_la-g15_plugin_logind.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(g15plugin_logind_la_CFLAGS) $(CFLAGS) -c -o g15plugin_logind_la-g15_plugin_logind.lo `test -f 'g15_plugin_logind.c' || echo '$(srcdir)/'`g15_plugin_logind.c
 
 peer_ident.lo: ../g15daemon/peer_ident.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT peer_ident.lo -MD -MP -MF $(DEPDIR)/peer_ident.Tpo -c -o peer_ident.lo `test -f '../g15daemon/peer_ident.c' || echo '$(srcdir)/'`../g15daemon/peer_ident.c
@@ -625,6 +658,7 @@ distclean: distclean-am
 	-rm -f ./$(DEPDIR)/g15_plugin_clock.Plo
 	-rm -f ./$(DEPDIR)/g15_plugin_net.Plo
 	-rm -f ./$(DEPDIR)/g15_plugin_uinput.Plo
+	-rm -f ./$(DEPDIR)/g15plugin_logind_la-g15_plugin_logind.Plo
 	-rm -f ./$(DEPDIR)/peer_ident.Plo
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
@@ -674,6 +708,7 @@ maintainer-clean: maintainer-clean-am
 	-rm -f ./$(DEPDIR)/g15_plugin_clock.Plo
 	-rm -f ./$(DEPDIR)/g15_plugin_net.Plo
 	-rm -f ./$(DEPDIR)/g15_plugin_uinput.Plo
+	-rm -f ./$(DEPDIR)/g15plugin_logind_la-g15_plugin_logind.Plo
 	-rm -f ./$(DEPDIR)/peer_ident.Plo
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic

@@ -659,6 +659,10 @@ LIBOBJS
 G15DAEMON_PLUGIN_DIR
 UINPUT_INTERFACE_PLUGIN_FALSE
 UINPUT_INTERFACE_PLUGIN_TRUE
+LOGIND_PLUGIN_FALSE
+LOGIND_PLUGIN_TRUE
+DBUS_LIBS
+DBUS_CFLAGS
 KEXT_INSTALL_FALSE
 KEXT_INSTALL_TRUE
 KEXT_LOCATION
@@ -806,6 +810,7 @@ with_gnu_ld
 with_sysroot
 enable_libtool_lock
 enable___disable_uinput
+enable_logind
 '
       ac_precious_vars='build_alias
 host_alias
@@ -820,7 +825,9 @@ PKG_CONFIG
 PKG_CONFIG_PATH
 PKG_CONFIG_LIBDIR
 LIBSYSTEMD_CFLAGS
-LIBSYSTEMD_LIBS'
+LIBSYSTEMD_LIBS
+DBUS_CFLAGS
+DBUS_LIBS'
 
 
 # Initialize some variables set by options.
@@ -1466,6 +1473,8 @@ Optional Features:
                           provide on AIX, [default=aix].
   --disable-libtool-lock  avoid locking (might break parallel builds)
   --disable-uinput	do not build linux uinput plugin (default: autodetect)
+  --disable-logind        do not build the logind idle monitor plugin
+                          (default: autodetect)
 
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
@@ -1493,6 +1502,8 @@ Some influential environment variables:
               C compiler flags for LIBSYSTEMD, overriding pkg-config
   LIBSYSTEMD_LIBS
               linker flags for LIBSYSTEMD, overriding pkg-config
+  DBUS_CFLAGS C compiler flags for DBUS, overriding pkg-config
+  DBUS_LIBS   linker flags for DBUS, overriding pkg-config
 
 Use these variables to override the choices made by 'configure' or to help
 it to find libraries and programs with nonstandard names/locations.
@@ -14587,6 +14598,12 @@ then :
   printf "%s\n" "#define HAVE_BACKTRACE_SYMBOLS 1" >>confdefs.h
 
 fi
+ac_fn_c_check_func "$LINENO" "close_range" "ac_cv_func_close_range"
+if test "x$ac_cv_func_close_range" = xyes
+then :
+  printf "%s\n" "#define HAVE_CLOSE_RANGE 1" >>confdefs.h
+
+fi
 
 
 # Checks for header files.
@@ -15173,6 +15190,103 @@ else
   KEXT_INSTALL_FALSE=
 fi
 
+
+# Optional: the logind idle-monitor plugin (backlight off while the session
+# is idle/locked) needs libdbus-1 and systemd-logind, so Linux only.
+# Check whether --enable-logind was given.
+if test ${enable_logind+y}
+then :
+  enableval=$enable_logind;
+fi
+
+logind=false
+if test "x$enable_logind" != "xno"; then
+  case $host_os in
+    *linux*)
+
+pkg_failed=no
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for dbus-1" >&5
+printf %s "checking for dbus-1... " >&6; }
+
+if test -n "$DBUS_CFLAGS"; then
+    pkg_cv_DBUS_CFLAGS="$DBUS_CFLAGS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"dbus-1\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "dbus-1") 2>&5
+  ac_status=$?
+  printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_DBUS_CFLAGS=`$PKG_CONFIG --cflags "dbus-1" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+if test -n "$DBUS_LIBS"; then
+    pkg_cv_DBUS_LIBS="$DBUS_LIBS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"dbus-1\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "dbus-1") 2>&5
+  ac_status=$?
+  printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_DBUS_LIBS=`$PKG_CONFIG --libs "dbus-1" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+
+
+
+if test $pkg_failed = yes; then
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+
+if $PKG_CONFIG --atleast-pkgconfig-version 0.20; then
+        _pkg_short_errors_supported=yes
+else
+        _pkg_short_errors_supported=no
+fi
+        if test $_pkg_short_errors_supported = yes; then
+                DBUS_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "dbus-1" 2>&1`
+        else
+                DBUS_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "dbus-1" 2>&1`
+        fi
+        # Put the nasty error message in config.log where it belongs
+        echo "$DBUS_PKG_ERRORS" >&5
+
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: libdbus-1 not found. NOT COMPILING LOGIND IDLE MONITOR PLUGIN." >&5
+printf "%s\n" "$as_me: libdbus-1 not found. NOT COMPILING LOGIND IDLE MONITOR PLUGIN." >&6;}
+elif test $pkg_failed = untried; then
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: libdbus-1 not found. NOT COMPILING LOGIND IDLE MONITOR PLUGIN." >&5
+printf "%s\n" "$as_me: libdbus-1 not found. NOT COMPILING LOGIND IDLE MONITOR PLUGIN." >&6;}
+else
+        DBUS_CFLAGS=$pkg_cv_DBUS_CFLAGS
+        DBUS_LIBS=$pkg_cv_DBUS_LIBS
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+printf "%s\n" "yes" >&6; }
+        logind=true
+fi
+      ;;
+  esac
+fi
+ if test x$logind = xtrue; then
+  LOGIND_PLUGIN_TRUE=
+  LOGIND_PLUGIN_FALSE='#'
+else
+  LOGIND_PLUGIN_TRUE='#'
+  LOGIND_PLUGIN_FALSE=
+fi
+
  if test x$uinput = xtrue; then
   UINPUT_INTERFACE_PLUGIN_TRUE=
   UINPUT_INTERFACE_PLUGIN_FALSE='#'
@@ -15361,6 +15475,10 @@ Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 if test -z "${KEXT_INSTALL_TRUE}" && test -z "${KEXT_INSTALL_FALSE}"; then
   as_fn_error $? "conditional \"KEXT_INSTALL\" was never defined.
+Usually this means the macro was only invoked conditionally." "$LINENO" 5
+fi
+if test -z "${LOGIND_PLUGIN_TRUE}" && test -z "${LOGIND_PLUGIN_FALSE}"; then
+  as_fn_error $? "conditional \"LOGIND_PLUGIN\" was never defined.
 Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 if test -z "${UINPUT_INTERFACE_PLUGIN_TRUE}" && test -z "${UINPUT_INTERFACE_PLUGIN_FALSE}"; then

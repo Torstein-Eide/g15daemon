@@ -173,7 +173,8 @@ void *plugin_thread(plugin_t *plugin_args) {
 		g15daemon_log(LOG_INFO,"Starting plugin thread \"%s\" in standard mode\n",info->name);
 		run_lcd_client(plugin_args);
 	}
-	else if(plugin_args->type == G15_PLUGIN_CORE_OS_KB||plugin_args->type == G15_PLUGIN_LCD_SERVER) {
+	else if(plugin_args->type == G15_PLUGIN_CORE_OS_KB||plugin_args->type == G15_PLUGIN_LCD_SERVER||
+		plugin_args->type == G15_PLUGIN_CORE_SERVICE) {
 		g15daemon_log(LOG_INFO,"Starting plugin thread \"%s\" in advanced mode\n",info->name);
 		run_advanced_client(plugin_args);
 	}
@@ -269,14 +270,17 @@ int g15_plugin_load (g15daemon_t *masterlist, char *filename) {
 		}
 		else if(plugin_args->type == G15_PLUGIN_CORE_OS_KB ||
 		plugin_args->type == G15_PLUGIN_CORE_KB_INPUT ||
-		plugin_args->type == G15_PLUGIN_LCD_SERVER){
+		plugin_args->type == G15_PLUGIN_LCD_SERVER ||
+		plugin_args->type == G15_PLUGIN_CORE_SERVICE){
 			plugin_args->args = masterlist;
 			plugin_args->plugin_handle = plugin_handle;
 			}
 		memset(&attr,0,sizeof(pthread_attr_t));
 		pthread_attr_init(&attr);
 		pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);
-		pthread_attr_setstacksize(&attr,64*1024); /* set stack to 64k - dont need 8Mb */
+		/* 256k, not 8Mb - was 64k, but the logind plugin's libdbus calls
+		 * (auth, message marshalling) want more headroom than that */
+		pthread_attr_setstacksize(&attr,256*1024);
 		if (pthread_create(&client_connection, &attr, (void*)plugin_thread, plugin_args) != 0) {
 			g15daemon_log(LOG_ERR,"Unable to create client thread.");
 			}

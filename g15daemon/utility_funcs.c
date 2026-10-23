@@ -293,6 +293,61 @@ int internal_generic_eventhandler(plugin_event_t *event) {
 	return G15_PLUGIN_OK;
 }
 
+/* Serializes backlight state changes from the net plugin's client threads,
+ * the keyboard thread and the logind plugin, so a state update and its
+ * hardware write can't interleave with another one. Taken before
+ * g15lib_mutex, never while holding it. */
+static pthread_mutex_t backlight_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* backlight_mutex must be held */
+static void apply_backlight(g15daemon_t *masterlist) {
+	unsigned int lcd_level = masterlist->backlight_idle ? G15_BRIGHTNESS_DARK : masterlist->lcd_backlight_state;
+	unsigned int kb_level = masterlist->backlight_idle ? G15_BRIGHTNESS_DARK : masterlist->kb_backlight_state;
+
+	pthread_mutex_lock(&g15lib_mutex);
+	setLCDBrightness(lcd_level);
+#if LIBG15_VERSION >= 1200
+	setKBBrightness(kb_level);
+#endif
+	pthread_mutex_unlock(&g15lib_mutex);
+}
+
+unsigned int g15daemon_set_backlight(g15daemon_t *masterlist, unsigned int which, unsigned int level) {
+	unsigned int prev;
+
+	if(level > G15_BRIGHTNESS_BRIGHT)
+		level = G15_BRIGHTNESS_BRIGHT;
+
+	pthread_mutex_lock(&backlight_mutex);
+	prev = (which & G15_BACKLIGHT_LCD) ? masterlist->lcd_backlight_state : masterlist->kb_backlight_state;
+	if(which & G15_BACKLIGHT_LCD)
+		masterlist->lcd_backlight_state = level;
+	if(which & G15_BACKLIGHT_KB)
+		masterlist->kb_backlight_state = level;
+	/* while idle this just re-writes DARK - the new level is kept and
+	 * takes effect on wake */
+	apply_backlight(masterlist);
+	pthread_mutex_unlock(&backlight_mutex);
+	return prev;
+}
+
+void g15daemon_set_backlight_idle(g15daemon_t *masterlist, unsigned int idle, unsigned int wake_bright) {
+	pthread_mutex_lock(&backlight_mutex);
+	if(!idle && wake_bright) {
+		masterlist->lcd_backlight_state = G15_BRIGHTNESS_BRIGHT;
+		masterlist->kb_backlight_state = G15_BRIGHTNESS_BRIGHT;
+	}
+	masterlist->backlight_idle = idle ? 1 : 0;
+	apply_backlight(masterlist);
+	pthread_mutex_unlock(&backlight_mutex);
+}
+
+void g15daemon_reapply_backlight(g15daemon_t *masterlist) {
+	pthread_mutex_lock(&backlight_mutex);
+	apply_backlight(masterlist);
+	pthread_mutex_unlock(&backlight_mutex);
+}
+
 /* free all memory used by the config subsystem */
 void uf_conf_free(g15daemon_t *list){
 	config_section_t *section=list->config->sections;

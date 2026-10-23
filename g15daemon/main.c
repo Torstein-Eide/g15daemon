@@ -51,7 +51,6 @@ int keyboard_backlight_off_onexit = 0;
 unsigned int g15daemon_debug = 0;
 unsigned int cycle_key;
 unsigned int client_handles_keys = 0;
-static unsigned int set_backlight = 0;
 struct lcd_t *keyhandler = NULL;
 static int loaded_plugins = 0;
 
@@ -86,12 +85,11 @@ int g15daemon_send_event(void *caller, unsigned int event, unsigned long value){
 					if((send(lcd->masterlist->remote_keyhandler_sock,(void *)&newevent->value,sizeof(newevent->value),0))<0)
 						g15daemon_log(LOG_WARNING,"Error in send: %s\n",strerror(errno));
 				}
-				if(value & G15_KEY_LIGHT){ // the backlight key was pressed - maintain user-selected state
-					lcd_t *displaying = lcd->masterlist->current->lcd;
-					lcd->masterlist->kb_backlight_state++;
-					lcd->masterlist->kb_backlight_state %= 3;
-					displaying->backlight_state++;
-					displaying->backlight_state %= 3; // limit to 0-2 inclusive
+				if(value & G15_KEY_LIGHT){ // the backlight key was pressed - cycle the global level
+					/* only reported by libg15's libusb backend - on Linux the
+					 * kernel driver handles the light key itself */
+					g15daemon_set_backlight(lcd->masterlist, G15_BACKLIGHT_LCD|G15_BACKLIGHT_KB,
+								(lcd->masterlist->kb_backlight_state + 1) % 3);
 				}
 				if(value & G15_KEY_M1) {
 					setLEDs(G15_LED_M1);
@@ -214,6 +212,8 @@ static void *keyboard_watch_thread(void *lcdlist){
 			g15daemon_send_refresh(masterlist->current->lcd);
 		}
 		pthread_mutex_unlock(&g15lib_mutex);
+		if(!leaving)
+			g15daemon_reapply_backlight(masterlist);
 		}
 	g15daemon_msleep(40);
 	}
@@ -240,7 +240,6 @@ static void *lcd_draw_thread(void *lcdlist){
 	/* unsigned int fps = 0; */
 	lcd_t *displaying = masterlist->tail->lcd;
 	memset(displaying->buf,0,1024);
-	static int prev_state=0;
 	/* sd_notify() throttling - see g15u_sd_notify_status/_watchdog calls
 	 * below. This loop already wakes at least once/second even when idle
 	 * (g15daemon_wait_refresh()'s internal 1s retry), so no extra thread
@@ -274,16 +273,6 @@ static void *lcd_draw_thread(void *lcdlist){
 		}
 		g15daemon_log(LOG_DEBUG,"LCD Update Complete");
 
-		if(prev_state!=displaying->backlight_state && set_backlight!=0) {
-			prev_state=displaying->backlight_state;
-			pthread_mutex_lock(&g15lib_mutex);
-			setLCDBrightness(displaying->backlight_state);
-			usleep(5);
-			setLCDBrightness(displaying->backlight_state);
-			setKBBrightness(displaying->backlight_state);
-			pthread_mutex_unlock(&g15lib_mutex);
-		}
-
 		if(displaying->state_changed){
 			pthread_mutex_lock(&g15lib_mutex);
 			setLCDContrast(displaying->contrast_state);
@@ -308,9 +297,11 @@ static void *lcd_draw_thread(void *lcdlist){
 			format_uptime((now.tv_sec - masterlist->start_time.tv_sec) +
 				      (now.tv_nsec - masterlist->start_time.tv_nsec) / 1e9,
 				      uptime_str, sizeof(uptime_str));
-			g15u_sd_notify_status("g15daemon %s | up %s | clients=%lu (%lu total) | fg=%s | last draw=%.2fms (min %.2f/max %.2f)",
+			g15u_sd_notify_status("g15daemon %s | up %s | clients=%lu (%lu total) | fg=%s | backlight=%u/%u%s | last draw=%.2fms (min %.2f/max %.2f)",
 					       PACKAGE_VERSION, uptime_str, masterlist->numclients,
 					       masterlist->total_clients_connected, fg_name,
+					       masterlist->lcd_backlight_state, masterlist->kb_backlight_state,
+					       masterlist->backlight_idle ? " (idle)" : "",
 					       masterlist->last_draw_ms, masterlist->min_draw_ms, masterlist->max_draw_ms);
 			g15_timer_start(&status_timer);
 		}
@@ -414,7 +405,6 @@ int main (int argc, char *argv[]) {
 			#endif
 			#endif
 			printf("\n -h\tshows this help\n -s\tchanges the screen-switch key from L1 to MR (beware)\n -d\tdebug mode - stay in foreground and output all debug messages to STDERR\n -v\tshow version\n -l\tset default LCD backlight level\n");
-			printf(" --set-backlight sets backlight individually for currently shown screen.\n\t\tDefault is to set backlight globally (keyboard default).\n");
 			exit(0);
 		}
 		if (!strncmp(daemonargs, "-s",2) || !strncmp(daemonargs, "--switch",8)) {
@@ -422,7 +412,8 @@ int main (int argc, char *argv[]) {
 			cycle_cmdline_override=1;
 		}
 		if (!strncmp(daemonargs, "--set-backlight",15)) {
-			set_backlight = 1;
+			/* backlight is always global now - see g15daemon_set_backlight() */
+			fprintf(stderr, "--set-backlight is no longer supported and is ignored: the backlight is global\n");
 		}
 		if (!strncmp(daemonargs, "-d",2) || !strncmp(daemonargs, "--debug",7)) {
 			g15daemon_debug = 1;
@@ -515,8 +506,10 @@ int main (int argc, char *argv[]) {
 		lcdlist->nobody = nobody;
 		setLCDContrast(1);
 		setLEDs(0);
+		if(lcdlevel > G15_BRIGHTNESS_BRIGHT)
+			lcdlevel = G15_BRIGHTNESS_BRIGHT;
 		lcdlist->kb_backlight_state=1;
-		lcdlist->current->lcd->backlight_state=lcdlevel;
+		lcdlist->lcd_backlight_state=lcdlevel;
 		setLCDBrightness(lcdlevel);
 
 #ifdef LIBG15_VERSION

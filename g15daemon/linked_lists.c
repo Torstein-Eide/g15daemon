@@ -40,7 +40,6 @@ lcd_t static * ll_create_lcd () {
 	lcd_t *lcd = g15daemon_xmalloc (sizeof (lcd_t));
 	lcd->max_x = LCD_WIDTH;
 	lcd->max_y = LCD_HEIGHT;
-	lcd->backlight_state = G15_BRIGHTNESS_MEDIUM;
 	lcd->mkey_state = 0;
 	lcd->contrast_state = G15_CONTRAST_MEDIUM;
 	lcd->state_changed = 1;

@@ -87,7 +87,11 @@ enum {
 	G15_PLUGIN_LCD_CLIENT =1,
 	G15_PLUGIN_CORE_KB_INPUT = 2,
 	G15_PLUGIN_CORE_OS_KB = 3,
-	G15_PLUGIN_LCD_SERVER = 4
+	G15_PLUGIN_LCD_SERVER = 4,
+	/* background service with no screen and no keyboard role (e.g. the
+	 * logind idle watcher) - run like LCD_SERVER, with the masterlist as
+	 * its argument */
+	G15_PLUGIN_CORE_SERVICE = 5
 };
 
 enum {
@@ -191,7 +195,6 @@ typedef struct lcd_s {
 	int max_x;
 	int max_y;
 	int connection;
-	unsigned int backlight_state;
 	unsigned int mkey_state;
 	unsigned int contrast_state;
 	unsigned int state_changed;
@@ -234,7 +237,17 @@ struct g15daemon_s {
 	struct passwd *nobody;
 	volatile unsigned long numclients;
 	configfile_t *config;
-	unsigned int kb_backlight_state; // master state
+	/* Backlight is global, not per-client: the hardware has one LCD and
+	 * one keyboard backlight, and per-client levels only ever meant the
+	 * light flickering between clients' choices on every screen switch.
+	 * Change these only through g15daemon_set_backlight()/
+	 * g15daemon_set_backlight_idle() (utility_funcs.c), which serialize
+	 * updates and push them to the hardware. */
+	unsigned int lcd_backlight_state;
+	unsigned int kb_backlight_state;
+	/* set while the session is idle (g15_plugin_logind): both backlights
+	 * are forced dark, the levels above are kept for restoring on wake */
+	unsigned int backlight_idle;
 	unsigned int remote_keyhandler_sock;
 	/* systemd status reporting - see sd_notify_util.h and main.c */
 	struct timespec start_time;
@@ -328,6 +341,17 @@ int g15daemon_dlclose_plugin(void *handle) ;
 int g15daemon_log (int priority, const char *fmt, ...);
 /* cycle from displayed screen to next on list */
 void g15daemon_lcdnode_cycle(g15daemon_t *masterlist);
+/* global backlight control - 'which' is a G15_BACKLIGHT_* mask, level is
+ * G15_BRIGHTNESS_*. Returns the previous level of the LCD backlight if it
+ * is in 'which', else of the keyboard backlight. */
+#define G15_BACKLIGHT_LCD 1
+#define G15_BACKLIGHT_KB 2
+unsigned int g15daemon_set_backlight(g15daemon_t *masterlist, unsigned int which, unsigned int level);
+/* force both backlights dark while idle, restoring the stored levels (or
+ * G15_BRIGHTNESS_BRIGHT if wake_bright) once no longer idle */
+void g15daemon_set_backlight_idle(g15daemon_t *masterlist, unsigned int idle, unsigned int wake_bright);
+/* re-push the current backlight state to the hardware (after a re-init) */
+void g15daemon_reapply_backlight(g15daemon_t *masterlist);
 /* add new screen */
 lcdnode_t *g15daemon_lcdnode_add(g15daemon_t **masterlist) ;
 /* remove screen */

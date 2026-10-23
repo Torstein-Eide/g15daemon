@@ -79,7 +79,7 @@ See examples for usage.
 
 .SH "G15Daemon Command Types"
 .P
-Commands and requests to the daemon are sent via OOB data packets.  Changes to the backlight and mkey state will only affect the calling client.  The following commands are supported as defined in g15daemon_client.h:
+Commands and requests to the daemon are sent via OOB data packets.  Changes to the mkey state will only affect the calling client.  The LCD and keyboard backlights are global: a backlight change applies to every client.  The following commands are supported as defined in g15daemon_client.h:
 
 .IP "G15DAEMON_KEY_HANDLER"
 Requests that all M and G key presses are sent to this client.  All keys are packed into an unsigned int, and sent to the client inband when a key is pressed.

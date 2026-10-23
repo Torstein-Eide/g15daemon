@@ -42,7 +42,7 @@ AC_TYPE_SIZE_T
 AC_PROG_GCC_TRADITIONAL
 AC_FUNC_SELECT_ARGTYPES
 AC_FUNC_STRFTIME
-AC_CHECK_FUNCS([memset select socket strerror backtrace backtrace_symbols])
+AC_CHECK_FUNCS([memset select socket strerror backtrace backtrace_symbols close_range])
 
 # Checks for header files.
 AC_CHECK_INCLUDES_DEFAULT
@@ -120,6 +120,20 @@ case $host_os in
 esac
 
 AM_CONDITIONAL([KEXT_INSTALL], [test x$install_kext = xtrue])
+
+# Optional: the logind idle-monitor plugin (backlight off while the session
+# is idle/locked) needs libdbus-1 and systemd-logind, so Linux only.
+AC_ARG_ENABLE([logind],[AS_HELP_STRING([--disable-logind],[do not build the logind idle monitor plugin (default: autodetect)])])
+logind=false
+if test "x$enable_logind" != "xno"; then
+  case $host_os in
+    *linux*)
+      PKG_CHECK_MODULES([DBUS], [dbus-1], [logind=true],
+          [AC_MSG_NOTICE([libdbus-1 not found. NOT COMPILING LOGIND IDLE MONITOR PLUGIN.])])
+      ;;
+  esac
+fi
+AM_CONDITIONAL([LOGIND_PLUGIN], [test x$logind = xtrue])
 AM_CONDITIONAL(UINPUT_INTERFACE_PLUGIN, [test x$uinput = xtrue])
 
 dnl Some versions of libusb do not honour timeout and block. Suns' version is one of them.

@@ -89,9 +89,27 @@ Options
 +------------------+---------------------------------------------------------------------------------+
 | -l               | Set default LCD backlight level                                                 |
 +------------------+---------------------------------------------------------------------------------+
-| --set-backlight  | Sets backlight individually for currently shown screen.                         |
-|                  | Default is to set backlight globally (keyboard default).                        |
-+------------------+---------------------------------------------------------------------------------+
+
+The backlight is global: one LCD and one keyboard backlight level shared by
+every client (the old per-screen ``--set-backlight`` mode has been removed;
+the option is accepted but ignored).
+
+============
+Idle monitor
+============
+
+On Linux, when built with ``libdbus-1``, the ``Idle Monitor (logind)`` plugin
+turns both backlights dark while seat0's active session is idle or locked
+(systemd-logind's ``IdleHint``) and restores them when it becomes active. The
+current screen keeps drawing. This replaces the separate ``g15dpms-monitor``
+daemon - don't run both. Settings live in ``/etc/g15daemon.conf``::
+
+    [Idle Monitor]
+    ; shell commands run on each transition, as g15daemon's unprivileged user
+    Idle Command:
+    Active Command:
+    ; restore to full brightness on wake instead of the previous level
+    Wake Bright: Off
 
 ===================
 Systemd integration
