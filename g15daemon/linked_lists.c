@@ -87,6 +87,7 @@ lcdnode_t *g15daemon_lcdnode_add(g15daemon_t **masterlist) {
 	new->lcd = ll_create_lcd();
 	new->lcd->masterlist = (*masterlist);
 	new->last_priority = NULL;
+	new->return_to = (*masterlist)->current;
 	new->list = *masterlist;
 	(*masterlist)->head->next=new;
 	(*masterlist)->current = new;
@@ -142,18 +143,25 @@ void g15daemon_lcdnode_remove (lcdnode_t *oldnode) {
 	 * G15_EVENT_REQ_PRIORITY on that node can write the stale pointer into
 	 * masterlist->current, causing a use-after-free crash far away from
 	 * here (see keyboard_watch_thread/g15daemon_lcdnode_cycle). */
+	/* same for return_to, except it inherits oldnode's own return_to so
+	 * a chain of stacked popups still unwinds to the original screen */
 	{
 		lcdnode_t *scan = oldnode->next;
 		while(scan != oldnode) {
 			if(scan->last_priority == oldnode)
 				scan->last_priority = NULL;
+			if(scan->return_to == oldnode)
+				scan->return_to = oldnode->return_to;
 			scan = scan->next;
 		}
 	}
 	ll_quit_lcd(oldnode->lcd);
 	(*masterlist)->numclients--;
 	if((*masterlist)->current == oldnode) {
-		if((*masterlist)->current!=(*masterlist)->head){
+		if(oldnode->return_to != NULL && oldnode->return_to != oldnode) {
+			(*masterlist)->current = oldnode->return_to;
+		}
+		else if((*masterlist)->current!=(*masterlist)->head){
 			(*masterlist)->current = oldnode->next;
 		}
 		else {

@@ -226,6 +226,12 @@ struct lcdnode_s {
 	lcdnode_t *prev;
 	lcdnode_t *next;
 	lcdnode_t *last_priority;
+	/* the screen that was in front when this client connected and took
+	 * the foreground - restored when this client disconnects while still
+	 * in front, so a short-lived popup client (notifications etc.) hands
+	 * the LCD back to what the user was looking at, not to whichever
+	 * client happens to be its neighbour in the list */
+	lcdnode_t *return_to;
 	lcd_t *lcd;
 };
 
