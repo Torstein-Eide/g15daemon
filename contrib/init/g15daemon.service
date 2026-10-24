@@ -21,7 +21,10 @@ WatchdogSec=30
 # (used in the STATUS= "fg=" field and the registered-clients log line):
 # after g15daemon drops root to the "nobody" user, reading another user's
 # /proc/<pid>/fd/ to match a client's socket back to its owning process
-# needs CAP_SYS_PTRACE. Without it, client names gracefully fall back to
+# needs CAP_SYS_PTRACE, plus CAP_DAC_READ_SEARCH to open that
+# /proc/<pid>/fd directory at all (mode 0500, owned by the client's uid).
+# peer_ident.c raises both in the accept thread only for that scan - the
+# seteuid() to nobody clears the effective set. Without them, client names gracefully fall back to
 # "peer <ip>:<port>" instead - see g15daemon/peer_ident.c.
 #
 # CAP_SETUID/CAP_SETGID must stay in the bounding set too - g15daemon
@@ -31,8 +34,8 @@ WatchdogSec=30
 # value isn't checked), leaving the daemon stuck running as root instead
 # of dropping privileges - confirmed live via /proc/<pid>/status Uid: line
 # still reading "0 0 0 0" after startup with the narrower set.
-AmbientCapabilities=CAP_SYS_PTRACE
-CapabilityBoundingSet=CAP_SYS_PTRACE CAP_SETUID CAP_SETGID
+AmbientCapabilities=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
+CapabilityBoundingSet=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH CAP_SETUID CAP_SETGID
 
 [Install]
 #WantedBy=sys-subsystem-usb-g15.device

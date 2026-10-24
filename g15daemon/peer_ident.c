@@ -8,8 +8,45 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#ifdef __linux__
+#include <sys/syscall.h>
+#include <linux/capability.h>
+#endif
 
 #include "peer_ident.h"
+
+#ifdef __linux__
+/* Raise (on=1) or drop the capabilities find_inode_owner() needs in this
+ * thread's effective set: CAP_DAC_READ_SEARCH to open another uid's
+ * /proc/<pid>/fd (mode 0500, owned by that uid) and CAP_SYS_PTRACE to
+ * readlink() its entries. After main()'s seteuid() to nobody the kernel
+ * clears the effective set but leaves the permitted set alone, so
+ * capabilities granted by the unit file (or held by a root-started -d run)
+ * are never actually in force otherwise - confirmed live: CapEff 0, every
+ * client named "peer <ip>:<port>". Capabilities are per-thread, so this
+ * only affects the calling (accept) thread. Raw syscalls to avoid a libcap
+ * dependency. Returns 0 on success. */
+static int set_ptrace_cap(int on) {
+	static const int caps[] = { CAP_DAC_READ_SEARCH, CAP_SYS_PTRACE };
+	struct __user_cap_header_struct hdr = { _LINUX_CAPABILITY_VERSION_3, 0 };
+	struct __user_cap_data_struct data[_LINUX_CAPABILITY_U32S_3];
+	size_t i;
+
+	if (syscall(SYS_capget, &hdr, data) != 0)
+		return -1;
+	for (i = 0; i < sizeof(caps) / sizeof(caps[0]); i++) {
+		if (!(data[CAP_TO_INDEX(caps[i])].permitted & CAP_TO_MASK(caps[i])))
+			return -1;
+		if (on)
+			data[CAP_TO_INDEX(caps[i])].effective |= CAP_TO_MASK(caps[i]);
+		else
+			data[CAP_TO_INDEX(caps[i])].effective &= ~CAP_TO_MASK(caps[i]);
+	}
+	return syscall(SYS_capset, &hdr, data) == 0 ? 0 : -1;
+}
+#else
+static int set_ptrace_cap(int on) { (void)on; return -1; }
+#endif
 
 static void fallback_label(int sockfd, char *out, size_t out_len) {
 	struct sockaddr_in peer;
@@ -143,7 +180,12 @@ void g15_resolve_peer_name(int sockfd, char *out, size_t out_len) {
 		return;
 	}
 
-	pid = find_inode_owner(inode);
+	{
+		int raised = set_ptrace_cap(1) == 0;
+		pid = find_inode_owner(inode);
+		if (raised)
+			set_ptrace_cap(0);
+	}
 	if (!pid) {
 		fallback_label(sockfd, out, out_len);
 		return;
