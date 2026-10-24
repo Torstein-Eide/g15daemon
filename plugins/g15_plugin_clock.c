@@ -61,6 +61,7 @@ static int use24h=1;
 static int showdate=0;
 static int digital=1;
 static int secondsbar=1;
+static int digitalsecs=0;	// digital variant showing HH:MM:SS instead of the seconds bar
 g15canvas *static_canvas = NULL;
 // LC_TIME locale for day/month names and the 12/24h default - a private
 // locale object rather than setlocale(), which would change the whole daemon
@@ -213,11 +214,14 @@ static int draw_digital(g15canvas *canvas){
 	unsigned int len=0;
 	int narrows=0;
 	int totalwidth=0;
+	int cellw = 20;
+	int x0;
 	char buf[10];
 	char ampm[3];
 	int height = G15_LCD_HEIGHT - 1;
+	int showbar = secondsbar && !digitalsecs;
 	// leave the seconds bar's row plus a 2px gap clear above the digits
-	int top = secondsbar ? 3 : 1;
+	int top = showbar ? 3 : 1;
 	struct timespec now;
 	struct tm *t;
 	clock_gettime(CLOCK_REALTIME, &now);
@@ -231,10 +235,10 @@ static int draw_digital(g15canvas *canvas){
 		height-=10;
 	}
 	if(use24h) {
-		clock_strftime(buf,6,"%H:%M",t);
+		clock_strftime(buf,9,digitalsecs ? "%H:%M:%S" : "%H:%M",t);
 	}
 	else{
-		clock_strftime(buf,6,"%l:%M",t);
+		clock_strftime(buf,9,digitalsecs ? "%l:%M:%S" : "%l:%M",t);
 		// empty in locales without AM/PM strings - then nothing is drawn
 		clock_strftime(ampm,3,"%p",t);
 	}
@@ -243,10 +247,20 @@ static int draw_digital(g15canvas *canvas){
 	len = strlen(buf);
 	if(buf[0]==' ')
 		len++;
-	if(narrows)
+	if(digitalsecs) {
+		// 8 cells of 20px fill the whole LCD - narrow them to fit AM/PM
+		cellw = (G15_LCD_WIDTH - (ampm[0] ? 20 : 0)) / len;
+		if(cellw > 20)
+			cellw = 20;
+		totalwidth = len*cellw;
+	}
+	else if(narrows)
 		totalwidth=(len*20)+(15);
 	else
 		totalwidth=len*20;
+	x0 = 80-(totalwidth)/2;
+	if(digitalsecs && ampm[0])
+		x0 = 0;	// AM/PM goes in the 20px left over on the right
 
 	for (col=0;col<len;col++){
 		int num = -1;
@@ -257,16 +271,16 @@ static int draw_digital(g15canvas *canvas){
 		else if (buf[col] == 46)
 			num = 12;
 		if (num >= 0)
-			g15r_drawBigNum (canvas, (80-(totalwidth)/2)+col*20, top,(80-(totalwidth)/2)+(col+1)*20, height, G15_COLOR_BLACK, num);
+			g15r_drawBigNum (canvas, x0+col*cellw, top, x0+(col+1)*cellw, height, G15_COLOR_BLACK, num);
 	}
 
 	if(ampm[0]!=0)
-		g15r_renderString (canvas,(unsigned char *)ampm,0,G15_TEXT_LARGE,totalwidth+15,height-6);
+		g15r_renderString (canvas,(unsigned char *)ampm,0,G15_TEXT_LARGE,digitalsecs ? totalwidth+2 : totalwidth+15,height-6);
 
 	// top pixel row (above the digits) fills up over the minute, one pixel
 	// every 375ms (160px/60s) using the sub-second time, so it creeps
 	// smoothly instead of jumping ~3px once a second
-	if(secondsbar) {
+	if(showbar) {
 		long ms = t->tm_sec * 1000L + now.tv_nsec / 1000000L;
 		int px = (int)((ms * G15_LCD_WIDTH) / 60000L);
 		if(px > G15_LCD_WIDTH)
@@ -369,9 +383,16 @@ static int myeventhandler(plugin_event_t *myevent){
 		case G15_EVENT_KEYPRESS:
 		clockcfg = g15daemon_cfg_load_section(lcd->masterlist,"Clock");
 			if(myevent->value & G15_KEY_L2){
-				// main screen: digital <-> analog, keeping the date setting
-				digital = 1^digital;
+				// main screen: digital -> digital with seconds -> analog,
+				// keeping the date setting
+				if(digital && !digitalsecs)
+					digitalsecs = 1;
+				else if(digital)
+					digital = digitalsecs = 0;
+				else
+					digital = 1;
 				g15daemon_cfg_write_bool(clockcfg, "Digital", digital);
+				g15daemon_cfg_write_bool(clockcfg, "Digital Seconds", digitalsecs);
 			}
 			if(myevent->value & G15_KEY_L3) {
 				showdate = 1^showdate;
@@ -424,6 +445,7 @@ static int myinithandler(lcd_t *lcd){
 	showdate=g15daemon_cfg_read_bool(clockcfg, "ShowDate",0);
 	digital=g15daemon_cfg_read_bool(clockcfg, "Digital",1);
 	secondsbar=g15daemon_cfg_read_bool(clockcfg, "Seconds Bar",1);
+	digitalsecs=g15daemon_cfg_read_bool(clockcfg, "Digital Seconds",0);
 
 	static_canvas = (g15canvas*)malloc(sizeof(g15canvas));
 	if (static_canvas != NULL){
