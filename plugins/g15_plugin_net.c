@@ -147,7 +147,7 @@ static void log_client_list(g15daemon_t *masterlist) {
 	node = masterlist->tail;
 	remaining = masterlist->numclients + 1;
 	while (remaining-- > 0 && used < sizeof(list) - 1) {
-		const char *name = node->lcd->client_name[0] ? node->lcd->client_name : "clock";
+		const char *name = g15daemon_screen_name(node->lcd);
 		int n = snprintf(list + used, sizeof(list) - used, "%s%s%s",
 				  used ? ", " : "", name,
 				  node == masterlist->current ? " (fg)" : "");
@@ -367,6 +367,7 @@ static int g15_clientconnect (g15daemon_t **g15daemon, int listening_socket) {
 	pthread_t client_connection;
 	pthread_attr_t attr;
 	lcdnode_t *clientnode;
+	char peer_name[64];
 	memset(pfd,0,sizeof(pfd));
 	pfd[0].fd = listening_socket;
 	pfd[0].events = POLLIN;
@@ -384,12 +385,14 @@ static int g15_clientconnect (g15daemon_t **g15daemon, int listening_socket) {
 		}
 	}
 
-	clientnode = g15daemon_lcdnode_add(g15daemon);
+	/* resolve the name first - it decides whether the new client may take
+	 * the foreground (see g15daemon_lcdnode_add_named()) */
+	g15_resolve_peer_name(conn_s, peer_name, sizeof(peer_name));
+	clientnode = g15daemon_lcdnode_add_named(g15daemon, peer_name);
 	clientnode->lcd->connection = conn_s;
 	/* override the default (generic handler and use our own for our clients */
 	clientnode->lcd->g15plugin->info=(void*)(&lcdclient_info);
 
-	g15_resolve_peer_name(conn_s, clientnode->lcd->client_name, sizeof(clientnode->lcd->client_name));
 	clock_gettime(CLOCK_MONOTONIC, &clientnode->lcd->connected_at);
 	(*g15daemon)->total_clients_connected++;
 	log_client_list(*g15daemon);

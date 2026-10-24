@@ -290,8 +290,7 @@ static void *lcd_draw_thread(void *lcdlist){
 		if(g15_timer_ms(&status_timer) >= 5000.0) {
 			struct timespec now;
 			char uptime_str[32];
-			const char *fg_name = masterlist->current->lcd->client_name[0] ?
-					       masterlist->current->lcd->client_name : "clock";
+			const char *fg_name = g15daemon_screen_name(masterlist->current->lcd);
 
 			clock_gettime(CLOCK_MONOTONIC, &now);
 			format_uptime((now.tv_sec - masterlist->start_time.tv_sec) +
@@ -519,6 +518,7 @@ int main (int argc, char *argv[]) {
 #endif
 		uf_conf_open(lcdlist, "/etc/g15daemon.conf");
 		global_cfg=g15daemon_cfg_load_section(lcdlist,"Global");
+		lcdlist->screen_cfg=g15daemon_cfg_load_section(lcdlist,"Screen Priority");
 		if(!cycle_cmdline_override){
 			cycle_key = 1==g15daemon_cfg_read_bool(global_cfg,"Use MR as Cycle Key",0)?G15_KEY_MR:G15_KEY_L1;
 		}

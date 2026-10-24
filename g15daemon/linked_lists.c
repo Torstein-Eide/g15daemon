@@ -24,6 +24,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <pthread.h>
 #include <g15daemon.h>
 #include <libg15.h>
@@ -78,19 +79,116 @@ g15daemon_t *ll_lcdlist_init () {
 	return masterlist;
 }
 
+/* stable name used to remember a screen across reconnects/restarts: the
+ * resolved process name for net clients, the plugin name (e.g. "Clock")
+ * for loaded LCD plugins */
+const char *g15daemon_screen_name(lcd_t *lcd) {
+	if(lcd->client_name[0])
+		return lcd->client_name;
+	/* nodes without a loaded plugin still point info at generic_info's
+	 * address, which isn't a plugin_info_t - only trust info once a
+	 * plugin has been memcpy'd in (g15_plugins.c) */
+	if(lcd->g15plugin->plugin_handle && lcd->g15plugin->info && lcd->g15plugin->info->name)
+		return lcd->g15plugin->info->name;
+	return "clock";
+}
+
+/* whether a name can be remembered in [Screen Priority] - peer_ident's
+ * "peer <ip>:<port>" fallback changes on every connect, and the config
+ * parser (uf_conf_open) splits keys on ':'/'=' and treats any line with
+ * ']' as a section header */
+static int screen_name_trackable(const char *name) {
+	return name && name[0] && strncmp(name, "peer ", 5) != 0 &&
+		!strpbrk(name, ":=[]\n");
+}
+
+/* lcdlist_mutex must be held */
+static const char *last_selected_screen(g15daemon_t *masterlist) {
+	config_items_t *item = uf_search_confitem(masterlist->screen_cfg, "Last Selected");
+	if(item == NULL || !screen_name_trackable(item->value))
+		return NULL;
+	return item->value;
+}
+
+/* lcdlist_mutex must be held. Remember the screen the user picked with the
+ * cycle key, so a known client (re)connecting later doesn't take the LCD
+ * away from it - see g15daemon_lcdnode_add_named() */
+static void remember_selected_screen(g15daemon_t *masterlist, lcd_t *lcd) {
+	const char *name = g15daemon_screen_name(lcd);
+	const char *prev = last_selected_screen(masterlist);
+	if(!screen_name_trackable(name) || (prev && !strcmp(prev, name)))
+		return;
+	g15daemon_cfg_write_string(masterlist->screen_cfg, "Last Selected", (char*)name);
+}
+
+/* lcdlist_mutex must be held. Returns 1 if the new client may take the
+ * foreground: anonymous clients (old behaviour) and apps never seen before
+ * do, as does the screen the user last selected with the cycle key. Any
+ * other known app joins in the background while that selection is
+ * connected - so at boot, with the clock as the user's last pick, g15stats
+ * starting later doesn't replace it. Known apps and the last pick are kept
+ * in g15daemon.conf's [Screen Priority], written back at clean shutdown. */
+static int may_take_foreground(g15daemon_t *masterlist, const char *name, int *is_selected) {
+	char key[96];
+	const char *selected;
+	lcdnode_t *scan;
+	unsigned long remaining;
+
+	*is_selected = 0;
+	if(!screen_name_trackable(name) || masterlist->screen_cfg == NULL)
+		return 1;
+	snprintf(key, sizeof(key), "Known.%s", name);
+	if(uf_search_confitem(masterlist->screen_cfg, key) == NULL) {
+		g15daemon_cfg_write_string(masterlist->screen_cfg, key, "Yes");
+		g15daemon_log(LOG_INFO, "New screen \"%s\" takes the foreground", name);
+		return 1;
+	}
+	selected = last_selected_screen(masterlist);
+	if(selected == NULL)
+		return 1;
+	if(!strcmp(selected, name)) {
+		*is_selected = 1;
+		return 1;
+	}
+	scan = masterlist->tail;
+	remaining = masterlist->numclients + 1;
+	while(remaining-- > 0) {
+		if(!strcmp(g15daemon_screen_name(scan->lcd), selected)) {
+			g15daemon_log(LOG_INFO, "Known screen \"%s\" stays behind user-selected \"%s\"", name, selected);
+			return 0;
+		}
+		scan = scan->next;
+	}
+	return 1;
+}
+
 lcdnode_t *g15daemon_lcdnode_add(g15daemon_t **masterlist) {
+	return g15daemon_lcdnode_add_named(masterlist, NULL);
+}
+
+lcdnode_t *g15daemon_lcdnode_add_named(g15daemon_t **masterlist, const char *name) {
 	lcdnode_t *new = NULL;
+	int take_front, is_selected;
 	pthread_mutex_lock(&lcdlist_mutex);
 	new = g15daemon_xmalloc(sizeof(lcdnode_t));
 	new->prev = (*masterlist)->head;
 	new->next = (*masterlist)->tail;
 	new->lcd = ll_create_lcd();
 	new->lcd->masterlist = (*masterlist);
+	if(name)
+		snprintf(new->lcd->client_name, sizeof(new->lcd->client_name), "%s", name);
 	new->last_priority = NULL;
-	new->return_to = (*masterlist)->current;
+	take_front = may_take_foreground(*masterlist, name, &is_selected);
+	new->return_to = take_front ? (*masterlist)->current : NULL;
 	new->list = *masterlist;
 	(*masterlist)->head->next=new;
-	(*masterlist)->current = new;
+	if(take_front) {
+		if(is_selected) {
+			(*masterlist)->current->lcd->usr_foreground = 0;
+			new->lcd->usr_foreground = 1;
+		}
+		(*masterlist)->current = new;
+	}
 	(*masterlist)->head = new;
 	(*masterlist)->head->list = *masterlist;
 	(*masterlist)->numclients++;
@@ -125,6 +223,7 @@ void g15daemon_lcdnode_cycle(g15daemon_t *masterlist){
 		goto skip;
 	}
 	masterlist->current->last_priority =  masterlist->current;
+	remember_selected_screen(masterlist, masterlist->current->lcd);
 	pthread_mutex_unlock(&lcdlist_mutex);
 	masterlist->current->lcd->usr_foreground=1;
 	g15daemon_send_event(masterlist->current->lcd, G15_EVENT_VISIBILITY_CHANGED, SCR_VISIBLE);

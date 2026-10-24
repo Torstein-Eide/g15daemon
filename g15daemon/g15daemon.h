@@ -243,6 +243,10 @@ struct g15daemon_s {
 	struct passwd *nobody;
 	volatile unsigned long numclients;
 	configfile_t *config;
+	/* g15daemon.conf's [Screen Priority]: known apps and the screen last
+	 * picked with the cycle key - loaded once in main() before any thread
+	 * starts, only touched under lcdlist_mutex (linked_lists.c) */
+	config_section_t *screen_cfg;
 	/* Backlight is global, not per-client: the hardware has one LCD and
 	 * one keyboard backlight, and per-client levels only ever meant the
 	 * light flickering between clients' choices on every screen switch.
@@ -360,6 +364,11 @@ void g15daemon_set_backlight_idle(g15daemon_t *masterlist, unsigned int idle, un
 void g15daemon_reapply_backlight(g15daemon_t *masterlist);
 /* add new screen */
 lcdnode_t *g15daemon_lcdnode_add(g15daemon_t **masterlist) ;
+/* add new screen for a named client - a known app doesn't take the
+ * foreground from the screen the user last selected (linked_lists.c) */
+lcdnode_t *g15daemon_lcdnode_add_named(g15daemon_t **masterlist, const char *name);
+/* stable name of a screen: client process name or plugin name */
+const char *g15daemon_screen_name(lcd_t *lcd);
 /* remove screen */
 void g15daemon_lcdnode_remove (lcdnode_t *oldnode);
 /* handy function from xine_utils.c */
