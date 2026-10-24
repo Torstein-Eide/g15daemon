@@ -162,7 +162,6 @@ static int may_take_foreground(g15daemon_t *masterlist, const char *name, int *i
 	do {
 		if(!strcmp(g15daemon_screen_name(scan->lcd), selected)) {
 			g15daemon_log(LOG_NOTICE, "New screen registered, \"%s\"", name);
-			g15daemon_log(LOG_INFO, "\"%s\" stays behind user-selected \"%s\"", name, selected);
 			return 0;
 		}
 		scan = scan->next;
