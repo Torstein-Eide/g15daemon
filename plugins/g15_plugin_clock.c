@@ -30,12 +30,15 @@
 #include <signal.h>
 #include <errno.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <math.h>
 #include <time.h>
+#include <locale.h>
+#include <langinfo.h>
 #include <libg15.h>
 #include <config.h>
 #include <g15daemon.h>
@@ -54,10 +57,90 @@ extern double round(double);
 #define CLOCK_ENDX		(CLOCK_CENTERX+CLOCK_RADIUS+1)
 #define CLOCK_ENDY		(CLOCK_CENTERY+CLOCK_RADIUS)
 
-static int mode=1;
+static int use24h=1;
 static int showdate=0;
 static int digital=1;
+static int secondsbar=1;
 g15canvas *static_canvas = NULL;
+// LC_TIME locale for day/month names and the 12/24h default - a private
+// locale object rather than setlocale(), which would change the whole daemon
+static locale_t clock_locale = (locale_t)0;
+
+/* ----------------------------------------------------------------------------
+ * ASCII stand-in for a Latin-1 Supplement codepoint, NULL if there is none.
+ * libg15render's fonts only render plain ASCII, but localized day/month names
+ * come out of strftime_l() as UTF-8 (e.g. "lørdag").
+*/
+static const char *ascii_fallback_for_codepoint(unsigned int cp){
+	switch (cp){
+		case 0xC0: case 0xC1: case 0xC2: case 0xC3: case 0xC4: case 0xC5: return "A";
+		case 0xC6: return "AE";
+		case 0xC7: return "C";
+		case 0xC8: case 0xC9: case 0xCA: case 0xCB: return "E";
+		case 0xCC: case 0xCD: case 0xCE: case 0xCF: return "I";
+		case 0xD0: return "D";
+		case 0xD1: return "N";
+		case 0xD2: case 0xD3: case 0xD4: case 0xD5: case 0xD6: case 0xD8: return "O";
+		case 0xD9: case 0xDA: case 0xDB: case 0xDC: return "U";
+		case 0xDD: return "Y";
+		case 0xDE: return "Th";
+		case 0xDF: return "ss";
+		case 0xE0: case 0xE1: case 0xE2: case 0xE3: case 0xE4: case 0xE5: return "a";
+		case 0xE6: return "ae";
+		case 0xE7: return "c";
+		case 0xE8: case 0xE9: case 0xEA: case 0xEB: return "e";
+		case 0xEC: case 0xED: case 0xEE: case 0xEF: return "i";
+		case 0xF0: return "d";
+		case 0xF1: return "n";
+		case 0xF2: case 0xF3: case 0xF4: case 0xF5: case 0xF6: case 0xF8: return "o";
+		case 0xF9: case 0xFA: case 0xFB: case 0xFC: return "u";
+		case 0xFD: case 0xFF: return "y";
+		case 0xFE: return "th";
+		default: return NULL;
+	}
+}
+
+/* decode UTF-8 `in` into an ASCII-only best-effort transliteration in `out` */
+static void ascii_sanitize(const char *in, char *out, size_t out_len){
+	const unsigned char *s = (const unsigned char *)in;
+	size_t oi = 0;
+	if (out_len == 0)
+		return;
+	while (*s != '\0' && oi + 1 < out_len){
+		unsigned int cp;
+		int seqlen, i, valid = 1;
+		const char *rep;
+		if (*s < 0x80)                { cp = *s;        seqlen = 1; }
+		else if ((*s & 0xE0) == 0xC0) { cp = *s & 0x1F; seqlen = 2; }
+		else if ((*s & 0xF0) == 0xE0) { cp = *s & 0x0F; seqlen = 3; }
+		else if ((*s & 0xF8) == 0xF0) { cp = *s & 0x07; seqlen = 4; }
+		else { s++; continue; }	// invalid lead byte - skip and resync
+		for (i = 1; i < seqlen; i++){
+			if ((s[i] & 0xC0) != 0x80){ valid = 0; break; }
+			cp = (cp << 6) | (s[i] & 0x3F);
+		}
+		if (!valid){ s++; continue; }
+		s += seqlen;
+		if (cp < 0x80){
+			out[oi++] = (char)cp;
+			continue;
+		}
+		rep = ascii_fallback_for_codepoint(cp);
+		if (rep == NULL)
+			rep = "?";
+		for (; *rep != '\0' && oi + 1 < out_len; rep++)
+			out[oi++] = *rep;
+	}
+	out[oi] = '\0';
+}
+
+/* strftime_l() in the clock's locale, transliterated to ASCII for the LCD */
+static void clock_strftime(char *out, size_t out_len, const char *fmt, const struct tm *t){
+	char raw[128];
+	if (strftime_l(raw, sizeof(raw), fmt, t, clock_locale) == 0)
+		raw[0] = '\0';
+	ascii_sanitize(raw, out, out_len);
+}
 
 /* ----------------------------------------------------------------------------
  * calc x,y for given minute/hour/sec (pos), cut_off is for radius variations
@@ -133,21 +216,27 @@ static int draw_digital(g15canvas *canvas){
 	char buf[10];
 	char ampm[3];
 	int height = G15_LCD_HEIGHT - 1;
-	time_t currtime = time(NULL);
+	// leave the seconds bar's row plus a 2px gap clear above the digits
+	int top = secondsbar ? 3 : 1;
+	struct timespec now;
+	struct tm *t;
+	clock_gettime(CLOCK_REALTIME, &now);
+	t = localtime(&now.tv_sec);
 	memset(buf,0,10);
 	memset(ampm,0,3);
 	if(showdate) {
 		char buf2[40];
-		strftime(buf2,40,"%A %e %B %Y",localtime(&currtime));
+		clock_strftime(buf2,40,"%A %e %B %Y",t);
 		g15r_renderString (canvas,(unsigned char *)buf2 , 0, G15_TEXT_MED, 80-((strlen(buf2)*5)/2), height-6);
 		height-=10;
 	}
-	if(mode) {
-		strftime(buf,6,"%H:%M",localtime(&currtime));
+	if(use24h) {
+		clock_strftime(buf,6,"%H:%M",t);
 	}
 	else{
-		strftime(buf,6,"%l:%M",localtime(&currtime));
-		strftime(ampm,3,"%p",localtime(&currtime));
+		clock_strftime(buf,6,"%l:%M",t);
+		// empty in locales without AM/PM strings - then nothing is drawn
+		clock_strftime(ampm,3,"%p",t);
 	}
 	if(buf[0]==49)
 		narrows=1;
@@ -168,11 +257,23 @@ static int draw_digital(g15canvas *canvas){
 		else if (buf[col] == 46)
 			num = 12;
 		if (num >= 0)
-			g15r_drawBigNum (canvas, (80-(totalwidth)/2)+col*20, 1,(80-(totalwidth)/2)+(col+1)*20, height, G15_COLOR_BLACK, num);
+			g15r_drawBigNum (canvas, (80-(totalwidth)/2)+col*20, top,(80-(totalwidth)/2)+(col+1)*20, height, G15_COLOR_BLACK, num);
 	}
 
 	if(ampm[0]!=0)
 		g15r_renderString (canvas,(unsigned char *)ampm,0,G15_TEXT_LARGE,totalwidth+15,height-6);
+
+	// top pixel row (above the digits) fills up over the minute, one pixel
+	// every 375ms (160px/60s) using the sub-second time, so it creeps
+	// smoothly instead of jumping ~3px once a second
+	if(secondsbar) {
+		long ms = t->tm_sec * 1000L + now.tv_nsec / 1000000L;
+		int px = (int)((ms * G15_LCD_WIDTH) / 60000L);
+		if(px > G15_LCD_WIDTH)
+			px = G15_LCD_WIDTH;	// leap second
+		if(px > 0)
+			g15r_drawLine (canvas, 0, 0, px-1, 0, G15_COLOR_BLACK);
+	}
 	return G15_PLUGIN_OK;
 }
 
@@ -211,14 +312,14 @@ static int draw_analog(g15canvas *c){
 	char time[32];	// 22:33:44
 	char date[sizeof(mon)+4];	// 21.April
 
-	strftime(day, sizeof(day), "%A", t);
-	strftime(mon, sizeof(mon), "%B", t);
+	clock_strftime(day, sizeof(day), "%A", t);
+	clock_strftime(mon, sizeof(mon), "%B", t);
 	snprintf(date, sizeof(date), "%d.%s", t->tm_mday, mon);
 	snprintf(year, sizeof(year), "%4d AD", t->tm_year+1900);
-	if(mode)
-		strftime(time,sizeof(time),"%H:%M:%S",t);
+	if(use24h)
+		clock_strftime(time,sizeof(time),"%H:%M:%S",t);
 	else
-		strftime(time,sizeof(time),"%r",t);
+		clock_strftime(time,sizeof(time),"%I:%M:%S %p",t);
 
 	if(showdate) {
 		g15r_renderString(c, (unsigned char*)time,  0, G15_TEXT_LARGE, 60, 4);
@@ -245,15 +346,18 @@ static int lcdclock(lcd_t *lcd){
 	canvas->mode_reverse = 0;
 	canvas->mode_xor = 0;
 
-	memset(lcd->buf,0,G15_BUFFER_LEN);
-
 	if(digital)
 		ret = draw_digital(canvas);
 	else
 		ret = draw_analog(canvas);
 
-	memcpy (lcd->buf, canvas->buffer, G15_BUFFER_LEN);
-	g15daemon_send_refresh(lcd);
+	// redrawn every 100ms but only pushed to the LCD when a pixel changed.
+	// lcd->buf is no longer cleared first: the draw thread could catch it
+	// blank between the clear and the copy, which flickered
+	if (memcmp(lcd->buf, canvas->buffer, G15_BUFFER_LEN) != 0) {
+		memcpy (lcd->buf, canvas->buffer, G15_BUFFER_LEN);
+		g15daemon_send_refresh(lcd);
+	}
 	free(canvas);
 	return ret;
 }
@@ -265,16 +369,16 @@ static int myeventhandler(plugin_event_t *myevent){
 		case G15_EVENT_KEYPRESS:
 		clockcfg = g15daemon_cfg_load_section(lcd->masterlist,"Clock");
 			if(myevent->value & G15_KEY_L2){
-				mode = 1^mode;
-				g15daemon_cfg_write_bool(clockcfg, "24hrFormat", mode);
+				// next variant: digital, digital+date, analog, analog+date
+				if(showdate)
+					digital = 1^digital;
+				showdate = 1^showdate;
+				g15daemon_cfg_write_bool(clockcfg, "Digital", digital);
+				g15daemon_cfg_write_bool(clockcfg, "ShowDate", showdate);
 			}
 			if(myevent->value & G15_KEY_L3) {
 				showdate = 1^showdate;
 				g15daemon_cfg_write_bool(clockcfg, "ShowDate", showdate);
-			}
-			if(myevent->value & G15_KEY_L4) {
-				digital = 1^digital;
-				g15daemon_cfg_write_bool(clockcfg, "Digital", digital);
 			}
 		// printf("Clock plugin received keypress event : %i\n",myevent->value);
 		break;
@@ -290,15 +394,39 @@ static int myeventhandler(plugin_event_t *myevent){
 /* completely uncessary function called when plugin is exiting */
 static void callmewhenimdone(lcd_t *lcd){
 	if(static_canvas != NULL) free(static_canvas);
+	if(clock_locale != (locale_t)0) freelocale(clock_locale);
 	return;
 }
 
 /* completely unnecessary initialisation function which could just as easily have been set to NULL in the g15plugin_info struct */
 static int myinithandler(lcd_t *lcd){
 	config_section_t *clockcfg = g15daemon_cfg_load_section(lcd->masterlist,"Clock");
-	mode=g15daemon_cfg_read_bool(clockcfg, "24hrFormat",1);
+	char *locname = g15daemon_cfg_read_string(clockcfg, "Locale", "");
+	char *timefmt = g15daemon_cfg_read_string(clockcfg, "Time Format", "Auto");
+
+	// empty Locale: = the daemon's own environment (LANG/LC_TIME/LC_ALL)
+	clock_locale = newlocale(LC_TIME_MASK, locname, (locale_t)0);
+	if(clock_locale == (locale_t)0) {
+		g15daemon_log(LOG_WARNING, "Clock: unknown locale \"%s\", using the environment's", locname);
+		clock_locale = newlocale(LC_TIME_MASK, "", (locale_t)0);
+	}
+	if(clock_locale == (locale_t)0)
+		clock_locale = newlocale(LC_TIME_MASK, "C", (locale_t)0);
+
+	if(strncasecmp(timefmt, "12", 2) == 0)
+		use24h = 0;
+	else if(strncasecmp(timefmt, "24", 2) == 0)
+		use24h = 1;
+	else {
+		// Auto: the locale's own time format decides (en_US "%r" -> 12h)
+		const char *t_fmt = nl_langinfo_l(T_FMT, clock_locale);
+		use24h = !(strstr(t_fmt, "%I") || strstr(t_fmt, "%l") || strstr(t_fmt, "%r"));
+	}
+	g15daemon_log(LOG_INFO, "Clock: locale \"%s\", %s time", *locname ? locname : "(environment)", use24h ? "24h" : "12h");
+
 	showdate=g15daemon_cfg_read_bool(clockcfg, "ShowDate",0);
 	digital=g15daemon_cfg_read_bool(clockcfg, "Digital",1);
+	secondsbar=g15daemon_cfg_read_bool(clockcfg, "Seconds Bar",1);
 
 	static_canvas = (g15canvas*)malloc(sizeof(g15canvas));
 	if (static_canvas != NULL){
@@ -314,6 +442,6 @@ static int myinithandler(lcd_t *lcd){
 /* if no exitfunc or eventhandler, member should be NULL */
 plugin_info_t g15plugin_info[] = {
 	/* TYPE, name, initfunc, updatefreq, exitfunc, eventhandler, initfunc */
-	{G15_PLUGIN_LCD_CLIENT, "Clock", (void*)lcdclock, 500, (void*)callmewhenimdone, (void*)myeventhandler, (void*)myinithandler},
+	{G15_PLUGIN_LCD_CLIENT, "Clock", (void*)lcdclock, 100, (void*)callmewhenimdone, (void*)myeventhandler, (void*)myinithandler},
 	{G15_PLUGIN_NONE,               ""          , NULL,     0,   NULL,            NULL,           NULL}
 };
