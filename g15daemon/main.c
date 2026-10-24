@@ -616,7 +616,6 @@ int main (int argc, char *argv[]) {
 		exitLibG15();
 	#endif
 	#endif
-		ll_lcdlist_destroy(&lcdlist);
 
 	exitnow:
 		/* return to root privilages for the final countdown */
@@ -626,6 +625,11 @@ int main (int argc, char *argv[]) {
 		g15daemon_quit_refresh();
 		uf_conf_write(lcdlist,"/etc/g15daemon.conf");
 		uf_conf_free(lcdlist);
+		/* only after the conf is written - it lives in lcdlist->config, and
+		 * destroying the list first wrote it from freed memory. The early
+		 * goto exitnow paths may still have a thread using the list. */
+		if(leaving)
+			ll_lcdlist_destroy(&lcdlist);
 		unlink("/var/run/g15daemon.pid");
 	}
 	return 0;
