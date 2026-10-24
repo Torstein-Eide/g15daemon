@@ -32,6 +32,7 @@
 extern lcd_t *keyhandler;
 extern unsigned int client_handles_keys;
 extern plugin_info_t *generic_info;
+extern unsigned int cycle_key;
 
 /* definition (storage) for the process-wide mutex declared extern in
  * g15daemon.h - see the comment there for why this must not be static */
@@ -116,8 +117,12 @@ static const char *last_selected_screen(g15daemon_t *masterlist) {
 static void remember_selected_screen(g15daemon_t *masterlist, lcd_t *lcd) {
 	const char *name = g15daemon_screen_name(lcd);
 	const char *prev = last_selected_screen(masterlist);
-	if(!screen_name_trackable(name) || (prev && !strcmp(prev, name)))
+	const char *key = cycle_key == G15_KEY_MR ? "MR" : "L1";
+	if(!screen_name_trackable(name) || (prev && !strcmp(prev, name))) {
+		g15daemon_log(LOG_NOTICE, "%s pressed, changing to screen \"%s\"", key, name);
 		return;
+	}
+	g15daemon_log(LOG_NOTICE, "%s pressed, changing to screen \"%s\", saving new preferred screen", key, name);
 	g15daemon_cfg_write_string(masterlist->screen_cfg, "Last Selected", (char*)name);
 }
 
@@ -157,7 +162,8 @@ static int may_take_foreground(g15daemon_t *masterlist, const char *name, int *i
 	remaining = masterlist->numclients + 1;
 	while(remaining-- > 0) {
 		if(!strcmp(g15daemon_screen_name(scan->lcd), selected)) {
-			g15daemon_log(LOG_NOTICE, "Known screen \"%s\" stays behind user-selected \"%s\"", name, selected);
+			g15daemon_log(LOG_NOTICE, "New screen registered, \"%s\"", name);
+			g15daemon_log(LOG_INFO, "\"%s\" stays behind user-selected \"%s\"", name, selected);
 			return 0;
 		}
 		scan = scan->next;
