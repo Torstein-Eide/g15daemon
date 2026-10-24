@@ -307,7 +307,7 @@ static void *lcd_draw_thread(void *lcdlist){
 			format_uptime((now.tv_sec - masterlist->start_time.tv_sec) +
 				      (now.tv_nsec - masterlist->start_time.tv_nsec) / 1e9,
 				      uptime_str, sizeof(uptime_str));
-			g15u_sd_notify_status("g15daemon %s | up %s | clients=%lu (%lu total) | fg=%s | backlight=%u/%u%s | last draw=%.2fms (min %.2f/max %.2f)",
+			g15u_sd_notify_status("g15daemon %s | up %s | clients=%lu (%lu connection events since start) | fg=%s | backlight=%u/%u%s | last draw=%.2fms (min %.2f/max %.2f)",
 					       PACKAGE_VERSION, uptime_str, masterlist->numclients,
 					       masterlist->total_clients_connected, fg_name,
 					       masterlist->lcd_backlight_state, masterlist->kb_backlight_state,
