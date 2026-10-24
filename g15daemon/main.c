@@ -146,6 +146,11 @@ int g15daemon_send_event(void *caller, unsigned int event, unsigned long value){
 			pthread_mutex_lock(&lcdlist_mutex);
 			if(lcdnode->list->current != lcdnode){
 				lcdnode->last_priority = lcdnode->list->current;
+				/* a popup that asked for the foreground (it joined
+				 * behind the user's pick - see
+				 * g15daemon_lcdnode_add_named()) hands the LCD back
+				 * to this screen when it disconnects */
+				lcdnode->return_to = lcdnode->list->current;
 				lcdnode->list->current = lcdnode;
 			}
 			else {

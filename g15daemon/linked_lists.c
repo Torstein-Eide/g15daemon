@@ -128,7 +128,9 @@ static void remember_selected_screen(g15daemon_t *masterlist, lcd_t *lcd) {
  * connected - so at boot, with the clock as the user's last pick, g15stats
  * starting later doesn't replace it. Known apps and the last pick are kept
  * in g15daemon.conf's [Screen Priority], written back at clean shutdown.
- * The decision is logged at LOG_NOTICE, visible without -d. */
+ * The decision is logged at LOG_NOTICE, visible without -d. Popup
+ * clients that must show over the user's pick ask for it explicitly with
+ * CLIENT_CMD_SWITCH_PRIORITIES (G15_EVENT_REQ_PRIORITY in main.c). */
 static int may_take_foreground(g15daemon_t *masterlist, const char *name, int *is_selected) {
 	char key[96];
 	const char *selected;
