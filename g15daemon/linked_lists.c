@@ -140,7 +140,6 @@ static int may_take_foreground(g15daemon_t *masterlist, const char *name, int *i
 	char key[96];
 	const char *selected;
 	lcdnode_t *scan;
-	unsigned long remaining;
 
 	*is_selected = 0;
 	if(!screen_name_trackable(name) || masterlist->screen_cfg == NULL)
@@ -158,16 +157,16 @@ static int may_take_foreground(g15daemon_t *masterlist, const char *name, int *i
 		*is_selected = 1;
 		return 1;
 	}
+	/* once around the circular list (tail -> ... -> head -> tail) */
 	scan = masterlist->tail;
-	remaining = masterlist->numclients + 1;
-	while(remaining-- > 0) {
+	do {
 		if(!strcmp(g15daemon_screen_name(scan->lcd), selected)) {
 			g15daemon_log(LOG_NOTICE, "New screen registered, \"%s\"", name);
 			g15daemon_log(LOG_INFO, "\"%s\" stays behind user-selected \"%s\"", name, selected);
 			return 0;
 		}
 		scan = scan->next;
-	}
+	} while(scan != masterlist->tail);
 	return 1;
 }
 

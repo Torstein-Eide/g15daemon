@@ -135,18 +135,18 @@ static void process_client_cmds(lcdnode_t *lcdnode, int sock, unsigned int *msgb
  * short per `systemctl status` conventions. The list is a circular
  * doubly-linked list (masterlist->tail is the built-in clock/menu node,
  * masterlist->head is the most recently connected client) - walk from
- * tail via ->next for numclients+1 steps to visit every node once. */
+ * tail via ->next until back at tail to visit every node once. Don't
+ * count steps from numclients: it already includes the clock node (see
+ * g15_plugins.c), so numclients+1 steps listed the clock twice. */
 static void log_client_list(g15daemon_t *masterlist) {
 	char list[512];
 	size_t used = 0;
 	lcdnode_t *node;
-	unsigned long remaining;
 
 	list[0] = '\0';
 	pthread_mutex_lock(&lcdlist_mutex);
 	node = masterlist->tail;
-	remaining = masterlist->numclients + 1;
-	while (remaining-- > 0 && used < sizeof(list) - 1) {
+	do {
 		const char *name = g15daemon_screen_name(node->lcd);
 		int n = snprintf(list + used, sizeof(list) - used, "%s%s%s",
 				  used ? ", " : "", name,
@@ -154,7 +154,7 @@ static void log_client_list(g15daemon_t *masterlist) {
 		if (n > 0)
 			used += (size_t)n;
 		node = node->next;
-	}
+	} while (node != masterlist->tail && used < sizeof(list) - 1);
 	pthread_mutex_unlock(&lcdlist_mutex);
 
 	/* LOG_INFO is semantically correct here (this isn't a warning
