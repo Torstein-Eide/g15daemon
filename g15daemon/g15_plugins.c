@@ -229,12 +229,12 @@ int g15_plugin_load (g15daemon_t *masterlist, char *filename) {
 			return -1;
 		}
 		if(strncasecmp("Load",g15daemon_cfg_read_string(plugin_cfg, plugin_args->info->name,"Load"),5)!=0){
-			g15daemon_log(LOG_ERR, "\"%s\" Plugin disabled in g15daemon.conf - not running\n",plugin_args->info->name);
+			g15daemon_log(LOG_NOTICE, "\"%s\" Plugin disabled in g15daemon.conf - not running\n",plugin_args->info->name);
 			g15daemon_dlclose_plugin(plugin_handle);
 			free(plugin_args);
 			return -1;
 		}
-		g15daemon_log(LOG_WARNING, "Booting plugin \"%s\"",plugin_args->info->name);
+		g15daemon_log(LOG_INFO, "Booting plugin \"%s\"",plugin_args->info->name);
 		plugin_args->type = plugin_args->info->type;
 		/* assign the generic eventhandler if the plugin doesnt provide one - the generic one does nothing atm. FIXME*/
 		if(plugin_args->info->event_handler==NULL)
@@ -306,7 +306,7 @@ int g15_open_all_plugins(g15daemon_t *masterlist, char *plugin_directory) {
 		g15daemon_log(LOG_INFO,"Number of plugins has changed. Rebuilding load order.");
 		directory = opendir (plugin_directory);
 		if (directory != NULL && count){
-			g15daemon_log(LOG_WARNING,"Attempting load of %i plugins",count);
+			g15daemon_log(LOG_INFO,"Attempting load of %i plugins",count);
 			while ((ep = readdir (directory))) {
 				if(strstr(ep->d_name,".so")){
 					snprintf(pluginname,sizeof(pluginname),"%s/%s",plugin_directory,ep->d_name);
@@ -321,7 +321,7 @@ int g15_open_all_plugins(g15daemon_t *masterlist, char *plugin_directory) {
 			}
 		(void) closedir (directory);
 		g15daemon_cfg_write_int(load_cfg,"TotalPlugins",loadcount);
-		g15daemon_log(LOG_WARNING,"Successfully loaded %i of %i plugins.",loadcount,count);
+		g15daemon_log(loadcount < count ? LOG_WARNING : LOG_NOTICE,"Successfully loaded %i of %i plugins.",loadcount,count);
 		return loadcount;
 		}
 		else

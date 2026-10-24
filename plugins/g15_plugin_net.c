@@ -109,9 +109,9 @@ static void process_client_cmds(lcdnode_t *lcdnode, int sock, unsigned int *msgb
 			setLEDs(msgbuf[0]-0x20);
 			}
 		else if (msgbuf[0] & CLIENT_CMD_KEY_HANDLER){
-			g15daemon_log(LOG_WARNING, "Client is taking over keystate");
+			g15daemon_log(LOG_DEBUG, "Client is taking over keystate");
 			lcdnode->list->remote_keyhandler_sock = sock;
-			g15daemon_log(LOG_WARNING, "Client has taken over keystate");
+			g15daemon_log(LOG_NOTICE, "Client has taken over keystate");
 		}
 		else if (msgbuf[0] & CLIENT_CMD_BACKLIGHT){ /* global, not per-client - see g15daemon_set_backlight() */
 			unsigned char retval = g15daemon_set_backlight(lcdnode->list, G15_BACKLIGHT_LCD, msgbuf[0]-0x80);
@@ -174,7 +174,7 @@ static int init_sockserver(){
 	struct    sockaddr_in servaddr;
 
 	if ((listening_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
-		g15daemon_log(LOG_WARNING, "Unable to create socket.\n");
+		g15daemon_log(LOG_ERR, "Unable to create socket: %s", strerror(errno));
 		return -1;
 	}
 
@@ -185,11 +185,11 @@ static int init_sockserver(){
 	inet_aton (LISTEN_ADDR, &servaddr.sin_addr);
 	servaddr.sin_port        = htons(LISTEN_PORT);
 	if (bind(listening_socket, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0 ) {
-		g15daemon_log(LOG_WARNING, "error calling bind()\n");
+		g15daemon_log(LOG_ERR, "error calling bind(): %s", strerror(errno));
 		return -1;
 	}
 	if (listen(listening_socket, MAX_CLIENTS) < 0 ) {
-		g15daemon_log(LOG_WARNING, "error calling listen()\n");
+		g15daemon_log(LOG_ERR, "error calling listen(): %s", strerror(errno));
 		return -1;
 	}
 	return listening_socket;
@@ -402,7 +402,7 @@ static int g15_clientconnect (g15daemon_t **g15daemon, int listening_socket) {
 	pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);
 	pthread_attr_setstacksize(&attr,256*1024); /* set stack to 768k - dont need 8Mb - this is probably rather excessive also */
 	if (pthread_create(&client_connection, &attr, lcd_client_thread, clientnode) != 0) {
-		g15daemon_log(LOG_WARNING,"Unable to create client thread.");
+		g15daemon_log(LOG_ERR,"Unable to create client thread.");
 		if (close(conn_s) < 0 ) {
 			g15daemon_log(LOG_WARNING, "error calling close()\n");
 			return -1;

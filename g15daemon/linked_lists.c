@@ -127,7 +127,8 @@ static void remember_selected_screen(g15daemon_t *masterlist, lcd_t *lcd) {
  * other known app joins in the background while that selection is
  * connected - so at boot, with the clock as the user's last pick, g15stats
  * starting later doesn't replace it. Known apps and the last pick are kept
- * in g15daemon.conf's [Screen Priority], written back at clean shutdown. */
+ * in g15daemon.conf's [Screen Priority], written back at clean shutdown.
+ * The decision is logged at LOG_NOTICE, visible without -d. */
 static int may_take_foreground(g15daemon_t *masterlist, const char *name, int *is_selected) {
 	char key[96];
 	const char *selected;
@@ -140,7 +141,7 @@ static int may_take_foreground(g15daemon_t *masterlist, const char *name, int *i
 	snprintf(key, sizeof(key), "Known.%s", name);
 	if(uf_search_confitem(masterlist->screen_cfg, key) == NULL) {
 		g15daemon_cfg_write_string(masterlist->screen_cfg, key, "Yes");
-		g15daemon_log(LOG_INFO, "New screen \"%s\" takes the foreground", name);
+		g15daemon_log(LOG_NOTICE, "New screen \"%s\" takes the foreground", name);
 		return 1;
 	}
 	selected = last_selected_screen(masterlist);
@@ -154,7 +155,7 @@ static int may_take_foreground(g15daemon_t *masterlist, const char *name, int *i
 	remaining = masterlist->numclients + 1;
 	while(remaining-- > 0) {
 		if(!strcmp(g15daemon_screen_name(scan->lcd), selected)) {
-			g15daemon_log(LOG_INFO, "Known screen \"%s\" stays behind user-selected \"%s\"", name, selected);
+			g15daemon_log(LOG_NOTICE, "Known screen \"%s\" stays behind user-selected \"%s\"", name, selected);
 			return 0;
 		}
 		scan = scan->next;
@@ -271,7 +272,7 @@ void g15daemon_lcdnode_remove (lcdnode_t *oldnode) {
 	if(&oldnode->lcd == (void*)keyhandler) {
 		client_handles_keys = 0;
 		keyhandler = NULL;
-		g15daemon_log(LOG_WARNING,"Client key handler quit, going back to defaults");
+		g15daemon_log(LOG_NOTICE,"Client key handler quit, going back to defaults");
 	}
 	if((*masterlist)->head!=oldnode){
 		(*next)->prev = oldnode->prev;

@@ -403,7 +403,7 @@ int main (int argc, char *argv[]) {
 			printf("\n -K\tturn off the keyboard backlight on the way out.");
 			#endif
 			#endif
-			printf("\n -h\tshows this help\n -s\tchanges the screen-switch key from L1 to MR (beware)\n -d\tdebug mode - stay in foreground and output all debug messages to STDERR\n -v\tshow version\n -l\tset default LCD backlight level\n");
+			printf("\n -h\tshows this help\n -s\tchanges the screen-switch key from L1 to MR (beware)\n -d\tdebug mode - stay in foreground and log to STDERR; optional level: 1 notice (default), 2 info, 3 debug\n -v\tshow version\n -l\tset default LCD backlight level\n");
 			exit(0);
 		}
 		if (!strncmp(daemonargs, "-s",2) || !strncmp(daemonargs, "--switch",8)) {
@@ -547,7 +547,7 @@ int main (int argc, char *argv[]) {
 			g15daemon_log(LOG_ERR,"Unable to create display thread.  Exiting");
 			goto exitnow;
 		}
-		g15daemon_log(LOG_INFO,"%s loaded\n",PACKAGE_STRING);
+		g15daemon_log(LOG_NOTICE,"%s loaded\n",PACKAGE_STRING);
 		{
 			struct g15_timer phase;
 			g15_timer_start(&phase);
@@ -581,7 +581,7 @@ int main (int argc, char *argv[]) {
 			pause();
 		}
 		while( leaving == 0);
-		g15daemon_log(LOG_INFO,"Leaving by request");
+		g15daemon_log(LOG_NOTICE,"Leaving by request");
 		g15u_sd_notify_stopping();
 
 		pthread_join(lcd_thread,NULL);

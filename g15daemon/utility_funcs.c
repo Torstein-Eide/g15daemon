@@ -62,7 +62,7 @@ void *g15daemon_xmalloc(size_t size) {
 	if( !size )
 		size++;
 	if((ptr = calloc(1, size)) == NULL) {
-		g15daemon_log(LOG_WARNING, "g15_xmalloc() failed: %s.\n", strerror(errno));
+		g15daemon_log(LOG_CRIT, "g15_xmalloc() failed: %s.\n", strerror(errno));
 		return NULL;
 	}
 	return ptr;
@@ -125,13 +125,13 @@ int uf_return_running(){
 		return -1;
 	}
 	if((pid = atoi(pidtxt)) <= 0) {
-		g15daemon_log(LOG_ERR,"pidfile corrupt");
+		g15daemon_log(LOG_WARNING,"pidfile corrupt - removing it");
 		unlink(G15DAEMON_PIDFILE);
 		close(fd);
 		return -1;
 	}
 	if((kill(pid,0) != 0) && errno != EPERM ) {
-		g15daemon_log(LOG_ERR,"Process died - removing pidfile");
+		g15daemon_log(LOG_WARNING,"Process died - removing pidfile");
 		unlink(G15DAEMON_PIDFILE);
 		close(fd);
 		return -1;
@@ -144,7 +144,7 @@ int uf_create_pidfile() {
 	size_t l;
 	int fd;
 	if(!uf_return_running() &&  (fd = open(G15DAEMON_PIDFILE, O_CREAT|O_RDWR|O_EXCL, 0644)) < 0) {
-		g15daemon_log(LOG_ERR,"previous G15Daemon process died.  removing pidfile");
+		g15daemon_log(LOG_WARNING,"previous G15Daemon process died.  removing pidfile");
 		unlink(G15DAEMON_PIDFILE);
 	}
 	if ((fd = open(G15DAEMON_PIDFILE, O_CREAT|O_RDWR|O_EXCL, 0644)) < 0) {
@@ -164,29 +164,54 @@ int uf_create_pidfile() {
 }
 
 /* syslog wrapper */
+/* Standard syslog severities (LOG_EMERG 0 ... LOG_DEBUG 7). Messages up
+ * to the verbosity threshold are emitted, the rest dropped:
+ *   no -d      LOG_NOTICE  -> syslog/journal
+ *   -d / -d 1  LOG_NOTICE  -> stderr
+ *   -d 2       LOG_INFO    -> stderr
+ *   -d 3+      LOG_DEBUG   -> stderr
+ * On stderr each line gets the level: as a "<N>" prefix when stderr is
+ * connected to the journal ($JOURNAL_STREAM, which journald parses into
+ * the record's priority), else as a readable "notice: " label. */
 int g15daemon_log (int priority, const char *fmt, ...) {
+	static const char *const names[] = {
+		"emerg", "alert", "crit", "err", "warning", "notice", "info", "debug"
+	};
 	va_list argp;
-	va_start (argp, fmt);
-	int real_prio=0;
+	int threshold;
+	int level = LOG_PRI(priority);
+
 	switch(g15daemon_debug) {
 		case 0:
 		case 1:
-			real_prio = LOG_WARNING;
+			threshold = LOG_NOTICE;
 			break;
 		case 2:
-			real_prio = LOG_INFO;
+			threshold = LOG_INFO;
 			break;
 		default:
-			real_prio = LOG_DEBUG;
+			threshold = LOG_DEBUG;
 	}
-	if(real_prio>=priority) {
-		if(g15daemon_debug == 0) {
-			vsyslog(priority, fmt, argp);
-		}
-		else {
-		vfprintf(stderr,fmt,argp);
-		fprintf(stderr,"\n");
-		}
+	if(level > threshold)
+		return 0;
+
+	va_start (argp, fmt);
+	if(g15daemon_debug == 0) {
+		vsyslog(priority, fmt, argp);
+	}
+	else {
+		char msg[1024];
+		size_t len;
+
+		vsnprintf(msg, sizeof(msg), fmt, argp);
+		/* many callers end their format with "\n" - don't double it */
+		len = strlen(msg);
+		while(len && msg[len-1] == '\n')
+			msg[--len] = '\0';
+		if(getenv("JOURNAL_STREAM"))
+			fprintf(stderr, "<%d>%s\n", level, msg);
+		else
+			fprintf(stderr, "%s: %s\n", names[level], msg);
 	}
 	va_end (argp);
 	return 0;
