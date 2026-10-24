@@ -1,3 +1,6 @@
+g15daemon 3.1.1 buster; urgency=low
+ * BugFix: Digital clock colon and digit spacing
+
 g15daemon 3.1 buster; urgency=low
  * Feature: Global backlight and logind idle-monitor plugin (replaces g15dpms-monitor)
  * Feature: Screen priority and return to previous screen on disconnect

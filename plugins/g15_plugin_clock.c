@@ -209,13 +209,25 @@ static void draw_static_canvas(void){
 	}
 }
 
+/* g15r_drawBigNum() glyph metrics, measured: in a cell [x1,x2] a digit's
+ * ink spans x1+2..x2-2, but a '1' (5px) and the colon (6px) are pinned to
+ * the right edge at x2-6/x2-7..x2-2 whatever the cell width. A 9px colon
+ * cell therefore leaves the same 3px either side as between two digits,
+ * where a full digit cell left 14px before the colon and 3px after it.
+ * A '1' in the hour (10-12 o'clock, 1 in 12h) gets a 9px cell for the
+ * same reason; minutes and seconds keep full cells so the centred clock
+ * doesn't shift sideways every time one of them ticks over to a 1. */
+#define BIGNUM_MAXW	20
+#define BIGNUM_NARROWW	9
+#define BIGNUM_INK_R	2	// blank columns right of every glyph
+
 static int draw_digital(g15canvas *canvas){
 	unsigned int col = 0;
 	unsigned int len=0;
-	int narrows=0;
-	int totalwidth=0;
-	int cellw = 20;
-	int x0;
+	int ndigits=0, ncolons=0;
+	int cellw, inkw, inkl, blockw, ampmw, x0, x;
+	int w[8];
+	char *digits;
 	char buf[10];
 	char ampm[3];
 	int height = G15_LCD_HEIGHT - 1;
@@ -242,40 +254,55 @@ static int draw_digital(g15canvas *canvas){
 		// empty in locales without AM/PM strings - then nothing is drawn
 		clock_strftime(ampm,3,"%p",t);
 	}
-	if(buf[0]==49)
-		narrows=1;
-	len = strlen(buf);
-	if(buf[0]==' ')
-		len++;
-	if(digitalsecs) {
-		// 8 cells of 20px fill the whole LCD - narrow them to fit AM/PM
-		cellw = (G15_LCD_WIDTH - (ampm[0] ? 20 : 0)) / len;
-		if(cellw > 20)
-			cellw = 20;
-		totalwidth = len*cellw;
+	digits = buf;
+	while(*digits == ' ')	// %l pads single-digit hours
+		digits++;
+	len = strlen(digits);
+	if (len > 8)
+		len = 8;
+	for (col=0;col<len;col++) {
+		if (digits[col] == ':')
+			ncolons++;
+		else
+			ndigits++;
 	}
-	else if(narrows)
-		totalwidth=(len*20)+(15);
-	else
-		totalwidth=len*20;
-	x0 = 80-(totalwidth)/2;
-	if(digitalsecs && ampm[0])
-		x0 = 0;	// AM/PM goes in the 20px left over on the right
+	if (ndigits == 0)
+		return G15_PLUGIN_OK;
 
+	// AM/PM sits 3px right of the digits; the large font is ~7px a letter
+	ampmw = ampm[0] ? 3 + (int)strlen(ampm) * 7 : 0;
+	cellw = (G15_LCD_WIDTH - ampmw - ncolons * BIGNUM_NARROWW) / ndigits;
+	if (cellw > BIGNUM_MAXW)
+		cellw = BIGNUM_MAXW;
+	if (cellw < BIGNUM_NARROWW)
+		cellw = BIGNUM_NARROWW;
+	inkw = 0;
+	for (col=0;col<len;col++) {
+		int inhour = strchr(digits, ':') == NULL || digits + col < strchr(digits, ':');
+		w[col] = (digits[col] == ':' || (inhour && digits[col] == '1')) ? BIGNUM_NARROWW : cellw;
+		inkw += w[col];
+	}
+
+	// centre the visible ink (plus AM/PM), not the cells
+	inkl = (w[0] == BIGNUM_NARROWW) ? 3 : 2;
+	inkw -= inkl + BIGNUM_INK_R;
+	blockw = inkw + ampmw;
+	x0 = (G15_LCD_WIDTH - blockw) / 2 - inkl;
+	if (x0 < 0)
+		x0 = 0;
+
+	x = x0;
 	for (col=0;col<len;col++){
 		int num = -1;
-		if ((buf[col] > 47) && (buf[col] < 59))
-			num = buf[col] - 48;
-		else if (buf[col] == 45)
-			num = 11;
-		else if (buf[col] == 46)
-			num = 12;
+		if ((digits[col] > 47) && (digits[col] < 59))
+			num = digits[col] - 48;
 		if (num >= 0)
-			g15r_drawBigNum (canvas, x0+col*cellw, top, x0+(col+1)*cellw, height, G15_COLOR_BLACK, num);
+			g15r_drawBigNum (canvas, x, top, x+w[col], height, G15_COLOR_BLACK, num);
+		x += w[col];
 	}
 
 	if(ampm[0]!=0)
-		g15r_renderString (canvas,(unsigned char *)ampm,0,G15_TEXT_LARGE,digitalsecs ? totalwidth+2 : totalwidth+15,height-6);
+		g15r_renderString (canvas,(unsigned char *)ampm,0,G15_TEXT_LARGE,x - BIGNUM_INK_R + 3,height-6);
 
 	// top pixel row (above the digits) fills up over the minute, one pixel
 	// every 375ms (160px/60s) using the sub-second time, so it creeps

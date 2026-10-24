@@ -161,3 +161,5 @@
 * BugFix: Concurrency fixes for the libg15 kernel-driver backend: separate mutexes for keys and LCD/LEDs (idle key polling starved LCD writes for seconds), a startup race leaving a client node with NULL info, and a use-after-free from a dangling last_priority pointer.
 * BugFix: g15daemon.conf was written at shutdown from the already freed client list; it is now written first.
 * BugFix: Assorted overflow, memory-leak, sequence-point and unchecked-return-value fixes (clock, plugin loader, config writer, uinput plugin, client library).
+3.1.1
+* BugFix: Digital clock spacing - colon and hour "1" no longer sit in full-width cells (even 3px gaps), digits and AM/PM centred on what is drawn
