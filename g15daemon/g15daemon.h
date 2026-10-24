@@ -40,6 +40,7 @@
 
 #include <pthread.h>
 #include <pwd.h>
+#include <sys/types.h>
 #include <syslog.h>
 #include <time.h>
 
@@ -210,6 +211,8 @@ typedef struct lcd_s {
 	 * the sd_notify STATUS= foreground field and the registered-clients
 	 * log line. */
 	char client_name[64];
+	/* owning PID from the same lookup, 0 if unresolved */
+	pid_t client_pid;
 	struct timespec connected_at;
 }
 lcd_s;

@@ -166,6 +166,34 @@ static void log_client_list(g15daemon_t *masterlist) {
 	g15daemon_log(LOG_INFO, "Registered clients: %s\n", list);
 }
 
+/* One LOG_INFO line (-d 2) per connect/disconnect with the client's
+ * socket details: name and PID from peer_ident, the peer address, our fd,
+ * and on disconnect how long it was connected. */
+static void log_client_event(lcd_t *lcd, const char *what) {
+	struct sockaddr_in peer;
+	socklen_t len = sizeof(peer);
+	char addr[INET_ADDRSTRLEN + 8] = "?";
+	char pid[24] = "?";
+	char duration[32] = "";
+
+	if (getpeername(lcd->connection, (struct sockaddr *)&peer, &len) == 0) {
+		char ip[INET_ADDRSTRLEN];
+		inet_ntop(AF_INET, &peer.sin_addr, ip, sizeof(ip));
+		snprintf(addr, sizeof(addr), "%s:%u", ip, ntohs(peer.sin_port));
+	}
+	if (lcd->client_pid)
+		snprintf(pid, sizeof(pid), "%d", (int)lcd->client_pid);
+	if (!strcmp(what, "disconnected")) {
+		struct timespec now;
+		clock_gettime(CLOCK_MONOTONIC, &now);
+		snprintf(duration, sizeof(duration), " after %.1fs",
+			 (now.tv_sec - lcd->connected_at.tv_sec) +
+			 (now.tv_nsec - lcd->connected_at.tv_nsec) / 1e9);
+	}
+	g15daemon_log(LOG_INFO, "Client %s: %s (pid %s) from %s, fd %d%s",
+		      what, g15daemon_screen_name(lcd), pid, addr, lcd->connection, duration);
+}
+
 /* create and open a socket for listening */
 static int init_sockserver(){
 	int listening_socket;
@@ -345,6 +373,8 @@ static void *lcd_client_thread(void *display) {
 	}
 
 exitthread:
+	/* before close(), while getpeername() still works */
+	log_client_event(client_lcd, "disconnected");
 	if(client_lcd->masterlist->remote_keyhandler_sock==client_sock)
 		client_lcd->masterlist->remote_keyhandler_sock=0;
 	close(client_sock);
@@ -368,6 +398,7 @@ static int g15_clientconnect (g15daemon_t **g15daemon, int listening_socket) {
 	pthread_attr_t attr;
 	lcdnode_t *clientnode;
 	char peer_name[64];
+	pid_t peer_pid = 0;
 	memset(pfd,0,sizeof(pfd));
 	pfd[0].fd = listening_socket;
 	pfd[0].events = POLLIN;
@@ -387,14 +418,16 @@ static int g15_clientconnect (g15daemon_t **g15daemon, int listening_socket) {
 
 	/* resolve the name first - it decides whether the new client may take
 	 * the foreground (see g15daemon_lcdnode_add_named()) */
-	g15_resolve_peer_name(conn_s, peer_name, sizeof(peer_name));
+	g15_resolve_peer_name(conn_s, peer_name, sizeof(peer_name), &peer_pid);
 	clientnode = g15daemon_lcdnode_add_named(g15daemon, peer_name);
 	clientnode->lcd->connection = conn_s;
+	clientnode->lcd->client_pid = peer_pid;
 	/* override the default (generic handler and use our own for our clients */
 	clientnode->lcd->g15plugin->info=(void*)(&lcdclient_info);
 
 	clock_gettime(CLOCK_MONOTONIC, &clientnode->lcd->connected_at);
 	(*g15daemon)->total_clients_connected++;
+	log_client_event(clientnode->lcd, "connected");
 	log_client_list(*g15daemon);
 
 	memset(&attr,0,sizeof(pthread_attr_t));

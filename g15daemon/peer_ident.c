@@ -168,11 +168,14 @@ static pid_t find_inode_owner(unsigned long inode) {
 	return 0;
 }
 
-void g15_resolve_peer_name(int sockfd, char *out, size_t out_len) {
+void g15_resolve_peer_name(int sockfd, char *out, size_t out_len, pid_t *pid_out) {
 	unsigned long inode;
 	pid_t pid;
 	char comm_path[32];
 	FILE *f;
+
+	if (pid_out)
+		*pid_out = 0;
 
 	inode = find_peer_inode(sockfd);
 	if (!inode) {
@@ -190,6 +193,8 @@ void g15_resolve_peer_name(int sockfd, char *out, size_t out_len) {
 		fallback_label(sockfd, out, out_len);
 		return;
 	}
+	if (pid_out)
+		*pid_out = pid;
 
 	snprintf(comm_path, sizeof(comm_path), "/proc/%d/comm", pid);
 	f = fopen(comm_path, "r");

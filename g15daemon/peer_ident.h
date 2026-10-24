@@ -2,6 +2,7 @@
 #define G15DAEMON_PEER_IDENT_H
 
 #include <stddef.h>
+#include <sys/types.h>
 
 /* Best-effort identification of the process on the other end of an
  * accepted AF_INET (loopback) TCP socket, e.g. for the sd_notify STATUS=
@@ -18,7 +19,8 @@
  * fallback when resolution isn't possible - e.g. no permission to read
  * another uid's /proc/<pid>/fd/, which needs CAP_SYS_PTRACE once
  * g15daemon has dropped root - see the AmbientCapabilities note in
- * contrib/init/g15daemon.service). */
-void g15_resolve_peer_name(int sockfd, char *out, size_t out_len);
+ * contrib/init/g15daemon.service). *pid_out (if non-NULL) gets the
+ * owning PID, or 0 when it couldn't be resolved. */
+void g15_resolve_peer_name(int sockfd, char *out, size_t out_len, pid_t *pid_out);
 
 #endif /* G15DAEMON_PEER_IDENT_H */
