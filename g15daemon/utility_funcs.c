@@ -367,6 +367,37 @@ void g15daemon_set_backlight_idle(g15daemon_t *masterlist, unsigned int idle, un
 	pthread_mutex_unlock(&backlight_mutex);
 }
 
+/* Adopt levels changed outside g15daemon - the kernel driver handles the
+ * light key itself, and UPower/desktop power managers may claim
+ * g15::kbd_backlight - so the status line shows the real levels and
+ * waking from idle restores what the user actually set. Skipped while
+ * idle, when the lights are dark on purpose. */
+void g15daemon_sync_backlight(g15daemon_t *masterlist) {
+#if LIBG15_VERSION >= 1202
+	unsigned int lcd = masterlist->lcd_backlight_state;
+	unsigned int kb = masterlist->kb_backlight_state;
+
+	pthread_mutex_lock(&backlight_mutex);
+	if(!masterlist->backlight_idle) {
+		pthread_mutex_lock(&g15lib_mutex);
+		if(getLCDBrightness(&lcd) != G15_NO_ERROR || lcd > G15_BRIGHTNESS_BRIGHT)
+			lcd = masterlist->lcd_backlight_state;
+		if(getKBBrightness(&kb) != G15_NO_ERROR || kb > G15_BRIGHTNESS_BRIGHT)
+			kb = masterlist->kb_backlight_state;
+		pthread_mutex_unlock(&g15lib_mutex);
+		if(lcd != masterlist->lcd_backlight_state || kb != masterlist->kb_backlight_state) {
+			g15daemon_log(LOG_INFO, "Backlight changed outside g15daemon: LCD %u -> %u, keyboard %u -> %u",
+				      masterlist->lcd_backlight_state, lcd, masterlist->kb_backlight_state, kb);
+			masterlist->lcd_backlight_state = lcd;
+			masterlist->kb_backlight_state = kb;
+		}
+	}
+	pthread_mutex_unlock(&backlight_mutex);
+#else
+	(void)masterlist;
+#endif
+}
+
 void g15daemon_reapply_backlight(g15daemon_t *masterlist) {
 	pthread_mutex_lock(&backlight_mutex);
 	apply_backlight(masterlist);

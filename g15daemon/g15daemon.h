@@ -365,6 +365,8 @@ unsigned int g15daemon_set_backlight(g15daemon_t *masterlist, unsigned int which
 void g15daemon_set_backlight_idle(g15daemon_t *masterlist, unsigned int idle, unsigned int wake_bright);
 /* re-push the current backlight state to the hardware (after a re-init) */
 void g15daemon_reapply_backlight(g15daemon_t *masterlist);
+/* read the real levels back and adopt outside changes (LIBG15_VERSION >= 1202) */
+void g15daemon_sync_backlight(g15daemon_t *masterlist);
 /* add new screen */
 lcdnode_t *g15daemon_lcdnode_add(g15daemon_t **masterlist) ;
 /* add new screen for a named client - a known app doesn't take the

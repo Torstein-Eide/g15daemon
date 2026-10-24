@@ -163,3 +163,8 @@
 * BugFix: Assorted overflow, memory-leak, sequence-point and unchecked-return-value fixes (clock, plugin loader, config writer, uinput plugin, client library).
 3.1.1
 * BugFix: Digital clock spacing - colon and hour "1" no longer sit in full-width cells (even 3px gaps), digits and AM/PM centred on what is drawn
+* Change: "New screen registered" is logged at NOTICE only the first time an app joins per run; repeat joins (popups reconnecting for every toast) at INFO
+* Change: systemd status says "N connection events since start" instead of the misleading "N total"
+* Change: Backlights are no longer forced to a level at startup. Set "LCD Backlight"/"Keyboard Backlight" (0-2) under [Global] or use -l; otherwise the current level is kept
+* BugFix: The systemd status showed the last level g15daemon wrote, not the real one. With libg15 3.0.9 the levels are read back every 5s and outside changes (light key, UPower/GNOME) are adopted and logged at INFO, so waking from idle restores the real level
+* Change: The LCD backlight is no longer switched off when g15daemon exits (only the screen is blanked); SIGUSR1 still switches both backlights off

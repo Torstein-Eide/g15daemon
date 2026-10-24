@@ -192,6 +192,41 @@ int g15daemon_send_event(void *caller, unsigned int event, unsigned long value){
 	return 0;
 }
 
+/* [Global] backlight level for `key`: 0-2, or -1 when empty (the default),
+ * meaning g15daemon leaves the hardware's current level alone at startup */
+static int cfg_backlight_level(config_section_t *cfg, char *key) {
+	char *val = g15daemon_cfg_read_string(cfg, key, "");
+	int level;
+	if(!isdigit((unsigned char)val[0]))
+		return -1;
+	level = atoi(val);
+	return level > G15_BRIGHTNESS_BRIGHT ? G15_BRIGHTNESS_BRIGHT : level;
+}
+
+/* set the configured level, or with none configured adopt whatever the
+ * light is at now (as left by the kernel, the light key or a previous run)
+ * instead of forcing it */
+static unsigned int initial_backlight(int configured, unsigned int which) {
+	if(configured >= 0) {
+		if(which == G15_BACKLIGHT_LCD)
+			setLCDBrightness(configured);
+#if LIBG15_VERSION >= 1200
+		else
+			setKBBrightness(configured);
+#endif
+		return configured;
+	}
+#if LIBG15_VERSION >= 1202
+	{
+		unsigned int level;
+		int ret = (which == G15_BACKLIGHT_LCD) ? getLCDBrightness(&level) : getKBBrightness(&level);
+		if(ret == G15_NO_ERROR)
+			return level > G15_BRIGHTNESS_BRIGHT ? G15_BRIGHTNESS_BRIGHT : level;
+	}
+#endif
+	return G15_BRIGHTNESS_MEDIUM;	/* unknown - assume the old default */
+}
+
 static void *keyboard_watch_thread(void *lcdlist){
 	g15daemon_t *masterlist = (g15daemon_t*)(lcdlist);
 	unsigned int keypresses = 0;
@@ -301,7 +336,10 @@ static void *lcd_draw_thread(void *lcdlist){
 		if(g15_timer_ms(&status_timer) >= 5000.0) {
 			struct timespec now;
 			char uptime_str[32];
-			const char *fg_name = g15daemon_screen_name(masterlist->current->lcd);
+			const char *fg_name;
+
+			g15daemon_sync_backlight(masterlist);
+			fg_name = g15daemon_screen_name(masterlist->current->lcd);
 
 			clock_gettime(CLOCK_MONOTONIC, &now);
 			format_uptime((now.tv_sec - masterlist->start_time.tv_sec) +
@@ -375,7 +413,7 @@ int main (int argc, char *argv[]) {
 	struct sigaction new_action;
 	cycle_key = G15_KEY_L1;
 	unsigned char user[256];
-	unsigned int lcdlevel = 1;
+	int lcdlevel = -1;	/* -l: -1 = not given */
 	pthread_t keyboard_thread;
 	pthread_t lcd_thread;
 	memset(user,0,256);
@@ -516,19 +554,16 @@ int main (int argc, char *argv[]) {
 		lcdlist->nobody = nobody;
 		setLCDContrast(1);
 		setLEDs(0);
-		if(lcdlevel > G15_BRIGHTNESS_BRIGHT)
-			lcdlevel = G15_BRIGHTNESS_BRIGHT;
-		lcdlist->kb_backlight_state=1;
-		lcdlist->lcd_backlight_state=lcdlevel;
-		setLCDBrightness(lcdlevel);
-
-#ifdef LIBG15_VERSION
-#if LIBG15_VERSION >= 1200
-	setKBBrightness(lcdlist->kb_backlight_state);
-#endif
-#endif
 		uf_conf_open(lcdlist, "/etc/g15daemon.conf");
 		global_cfg=g15daemon_cfg_load_section(lcdlist,"Global");
+		/* still root here - the LED fds are opened by libg15 before the
+		 * privilege drop below */
+		if(lcdlevel > G15_BRIGHTNESS_BRIGHT)
+			lcdlevel = G15_BRIGHTNESS_BRIGHT;
+		lcdlist->lcd_backlight_state = initial_backlight(lcdlevel >= 0 ? lcdlevel :
+			cfg_backlight_level(global_cfg, "LCD Backlight"), G15_BACKLIGHT_LCD);
+		lcdlist->kb_backlight_state = initial_backlight(
+			cfg_backlight_level(global_cfg, "Keyboard Backlight"), G15_BACKLIGHT_KB);
 		lcdlist->screen_cfg=g15daemon_cfg_load_section(lcdlist,"Screen Priority");
 		if(!cycle_cmdline_override){
 			cycle_key = 1==g15daemon_cfg_read_bool(global_cfg,"Use MR as Cycle Key",0)?G15_KEY_MR:G15_KEY_L1;
@@ -597,19 +632,22 @@ int main (int argc, char *argv[]) {
 
 		pthread_join(lcd_thread,NULL);
 		pthread_join(keyboard_thread,NULL);
-		/* switch off the lcd backlight */
+		/* blank the screen but leave the backlights as they are - startup
+		 * no longer forces a level, so switching them off here left the
+		 * LCD dark after every restart */
 		char *blank=g15daemon_xmalloc(G15_BUFFER_LEN);
 		writePixmapToLCD((unsigned char*)blank);
 		free(blank);
-		setLCDBrightness(0);
 
+		/* if SIGUSR1 was sent to kill us, switch off both backlights */
+		if(keyboard_backlight_off_onexit==1) {
+			setLCDBrightness(0);
 	#ifdef LIBG15_VERSION
 	#if LIBG15_VERSION >= 1200
-		/* if SIGUSR1 was sent to kill us, switch off the keyboard backlight as well */
-		if(keyboard_backlight_off_onexit==1)
 			setKBBrightness(0);
 	#endif
 	#endif
+		}
 
 	#ifdef LIBG15_VERSION
 	#if LIBG15_VERSION >= 1100

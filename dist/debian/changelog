@@ -1,5 +1,8 @@
 g15daemon 3.1.1 buster; urgency=low
  * BugFix: Digital clock colon and digit spacing
+ * Change: Repeat popup registrations logged at INFO instead of NOTICE
+ * Change: Clearer client connection count in systemd status
+ * Change: Backlight only set at startup when configured; real levels read back (needs libg15 3.0.9)
 
 g15daemon 3.1 buster; urgency=low
  * Feature: Global backlight and logind idle-monitor plugin (replaces g15dpms-monitor)
