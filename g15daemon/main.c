@@ -152,6 +152,9 @@ int g15daemon_send_event(void *caller, unsigned int event, unsigned long value){
 				 * to this screen when it disconnects */
 				lcdnode->return_to = lcdnode->list->current;
 				lcdnode->list->current = lcdnode;
+				g15daemon_log(LOG_INFO, "Screen \"%s\" requested the foreground, covering \"%s\"",
+					      g15daemon_screen_name(lcdnode->lcd),
+					      g15daemon_screen_name(lcdnode->return_to->lcd));
 			}
 			else {
 				if(lcdnode->list->current == lcdnode->last_priority){
@@ -165,6 +168,9 @@ int g15daemon_send_event(void *caller, unsigned int event, unsigned long value){
 				else
 				lcdnode->list->current = lcdnode->list->current->prev;
 				}
+				g15daemon_log(LOG_INFO, "Screen \"%s\" gave up the foreground to \"%s\"",
+					      g15daemon_screen_name(lcdnode->lcd),
+					      g15daemon_screen_name(lcdnode->list->current->lcd));
 			}
 			pthread_mutex_unlock(&lcdlist_mutex);
 			g15daemon_send_refresh((lcd_t*)lcdnode->list->current->lcd);

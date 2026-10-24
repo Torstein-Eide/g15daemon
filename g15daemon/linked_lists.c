@@ -240,8 +240,11 @@ void g15daemon_lcdnode_remove (lcdnode_t *oldnode) {
 	g15daemon_t **masterlist = NULL;
 	lcdnode_t **prev = NULL;
 	lcdnode_t **next = NULL;
+	char oldname[64];
 	pthread_mutex_lock(&lcdlist_mutex);
 	masterlist = &oldnode->list;
+	/* the lcd (and with it client_name) is freed below */
+	snprintf(oldname, sizeof(oldname), "%s", g15daemon_screen_name(oldnode->lcd));
 	prev = &oldnode->prev;
 	next = &oldnode->next;
 	/* clear any other node's last_priority pointing at oldnode - otherwise
@@ -274,6 +277,8 @@ void g15daemon_lcdnode_remove (lcdnode_t *oldnode) {
 			(*masterlist)->current = oldnode->prev;
 		}
 		(*masterlist)->current->lcd->state_changed = 1;
+		g15daemon_log(LOG_INFO, "Screen \"%s\" closed, returning to \"%s\"",
+			      oldname, g15daemon_screen_name((*masterlist)->current->lcd));
 	}
 	if(&oldnode->lcd == (void*)keyhandler) {
 		client_handles_keys = 0;
