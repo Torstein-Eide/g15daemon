@@ -369,12 +369,9 @@ static int myeventhandler(plugin_event_t *myevent){
 		case G15_EVENT_KEYPRESS:
 		clockcfg = g15daemon_cfg_load_section(lcd->masterlist,"Clock");
 			if(myevent->value & G15_KEY_L2){
-				// next variant: digital, digital+date, analog, analog+date
-				if(showdate)
-					digital = 1^digital;
-				showdate = 1^showdate;
+				// main screen: digital <-> analog, keeping the date setting
+				digital = 1^digital;
 				g15daemon_cfg_write_bool(clockcfg, "Digital", digital);
-				g15daemon_cfg_write_bool(clockcfg, "ShowDate", showdate);
 			}
 			if(myevent->value & G15_KEY_L3) {
 				showdate = 1^showdate;

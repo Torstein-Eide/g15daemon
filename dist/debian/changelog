@@ -2,7 +2,7 @@ g15daemon 3.1 buster; urgency=low
  * Feature: Global backlight and logind idle-monitor plugin (replaces g15dpms-monitor)
  * Feature: Screen priority and return to previous screen on disconnect
  * Feature: Client identification by process name, systemd sd_notify status/watchdog
- * Feature: Clock plugin L2 variant cycling, locale-driven 12/24h with config override, seconds bar
+ * Feature: Clock plugin L2 digital/analog, locale-driven 12/24h with config override, seconds bar
  * BugFix: Concurrency, memory and return-value fixes, conf written before the client list is freed
 
 g15daemon 3.0.2 buster; urgency=low
