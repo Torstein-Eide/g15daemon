@@ -126,6 +126,22 @@ static void remember_selected_screen(g15daemon_t *masterlist, lcd_t *lcd) {
 	g15daemon_cfg_write_string(masterlist->screen_cfg, "Last Selected", (char*)name);
 }
 
+/* lcdlist_mutex must be held. Returns 1 the first time `name` is seen in
+ * this run, 0 after. Popup clients (g15notifications, g15media toasts)
+ * reconnect for every popup, so their joins are logged at NOTICE once and
+ * at INFO after that - otherwise each toast left a line in the journal. */
+static int first_registration(const char *name) {
+	static char seen[32][64];
+	static int nseen;
+	int i;
+	for(i = 0; i < nseen; i++)
+		if(!strcmp(seen[i], name))
+			return 0;
+	if(nseen < 32)
+		snprintf(seen[nseen++], sizeof(seen[0]), "%s", name);
+	return 1;
+}
+
 /* lcdlist_mutex must be held. Returns 1 if the new client may take the
  * foreground: anonymous clients (old behaviour) and apps never seen before
  * do, as does the screen the user last selected with the cycle key. Any
@@ -133,7 +149,8 @@ static void remember_selected_screen(g15daemon_t *masterlist, lcd_t *lcd) {
  * connected - so at boot, with the clock as the user's last pick, g15stats
  * starting later doesn't replace it. Known apps and the last pick are kept
  * in g15daemon.conf's [Screen Priority], written back at clean shutdown.
- * The decision is logged at LOG_NOTICE, visible without -d. Popup
+ * The decision is logged at LOG_NOTICE, visible without -d (repeat joins
+ * of the same app at LOG_INFO, see first_registration()). Popup
  * clients that must show over the user's pick ask for it explicitly with
  * CLIENT_CMD_SWITCH_PRIORITIES (G15_EVENT_REQ_PRIORITY in main.c). */
 static int may_take_foreground(g15daemon_t *masterlist, const char *name, int *is_selected) {
@@ -161,7 +178,8 @@ static int may_take_foreground(g15daemon_t *masterlist, const char *name, int *i
 	scan = masterlist->tail;
 	do {
 		if(!strcmp(g15daemon_screen_name(scan->lcd), selected)) {
-			g15daemon_log(LOG_NOTICE, "New screen registered, \"%s\"", name);
+			g15daemon_log(first_registration(name) ? LOG_NOTICE : LOG_INFO,
+				      "New screen registered, \"%s\"", name);
 			return 0;
 		}
 		scan = scan->next;
