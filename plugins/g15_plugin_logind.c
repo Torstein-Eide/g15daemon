@@ -17,10 +17,22 @@
  *
  * (c) 2007 Mike Lampard (g15dpms-monitor, which this replaces)
  *
- * Idle monitor: turns the G15's LCD and keyboard backlights dark while the
- * seat's active session is idle (screen locked/blanked), and restores them
- * when it becomes active again. Only the backlights change - whatever
- * screen is in front (e.g. the clock) keeps drawing.
+ * Idle monitor: turns the G15's LCD backlight dark while the seat's active
+ * session is idle (screen locked/blanked), and restores it when it becomes
+ * active again. Only the backlight changes - whatever screen is in front
+ * (e.g. the clock) keeps drawing.
+ *
+ * It also switches the LCD backlight off when the system powers off or
+ * reboots (logind's PrepareForShutdown), holding a "delay" inhibitor lock
+ * so logind waits for that before going down; a plain daemon restart
+ * leaves the light alone.
+ *
+ * The keyboard backlight is deliberately left alone: UPower/GNOME already
+ * switch g15::kbd_backlight off at dim/blank and restore it on wake, and
+ * systemd-backlight saves it at poweroff and restores it at boot. Doing it
+ * here too raced them - g15daemon read GNOME's 0 at idle and wrote it back
+ * over GNOME's restore on wake, and darkening it at poweroff made
+ * systemd-backlight save 0.
  *
  * Idle state is systemd-logind's IdleHint for seat0's active session, read
  * from the *system* bus: unlike X11 DPMS or a session-bus screensaver
@@ -30,8 +42,8 @@
  * Settings ([Idle Monitor] in g15daemon.conf):
  *   Idle Command / Active Command - optional shell command run on each
  *     transition, as g15daemon's unprivileged user
- *   Wake Bright - restore to full brightness on wake instead of the
- *     previous level
+ *   Wake Bright - restore the LCD backlight to full brightness on wake
+ *     instead of the previous level
  */
 
 #define _GNU_SOURCE /* setresuid()/setresgid(), close_range() */
@@ -54,6 +66,8 @@
 #define LOGIND_SEAT_INTERFACE     "org.freedesktop.login1.Seat"
 #define LOGIND_SESSION_INTERFACE  "org.freedesktop.login1.Session"
 #define DBUS_PROPERTIES_INTERFACE "org.freedesktop.DBus.Properties"
+#define LOGIND_MANAGER_PATH       "/org/freedesktop/login1"
+#define LOGIND_MANAGER_INTERFACE  "org.freedesktop.login1.Manager"
 
 /* how often to retry the system bus while it's unavailable (in run() calls,
  * roughly one per second) */
@@ -69,8 +83,15 @@ static int session_idle = 0;
 static int have_state = 0;
 static char active_session_path[256] = "";
 
+/* set by logind_filter_cb() from PrepareForShutdown */
+static int shutting_down = 0;
+/* the delay inhibitor lock - logind waits for it to be closed (or
+ * InhibitDelayMaxSec) after announcing a shutdown */
+static int inhibit_fd = -1;
+
 /* what was last applied, so run() only acts on transitions */
 static int applied_idle = 0;
+static int applied_shutdown = 0;
 
 static char *idle_cmd = NULL;
 static char *active_cmd = NULL;
@@ -200,10 +221,54 @@ static void refresh_active_session(void) {
 	refresh_idle_state();
 }
 
+/* Take a "delay" shutdown inhibitor lock. polkit's default lets anyone
+ * take delay locks, including g15daemon's unprivileged user. */
+static void take_inhibitor(void) {
+	const char *what = "shutdown", *who = "g15daemon";
+	const char *why = "Switch off the G15 backlights", *mode = "delay";
+	DBusMessage *req, *reply;
+	DBusError err;
+
+	if(inhibit_fd >= 0 || !dbus_connection_can_send_type(conn, DBUS_TYPE_UNIX_FD))
+		return;
+	req = dbus_message_new_method_call(LOGIND_SERVICE, LOGIND_MANAGER_PATH,
+					   LOGIND_MANAGER_INTERFACE, "Inhibit");
+	if(req == NULL)
+		return;
+	dbus_message_append_args(req, DBUS_TYPE_STRING, &what, DBUS_TYPE_STRING, &who,
+				 DBUS_TYPE_STRING, &why, DBUS_TYPE_STRING, &mode, DBUS_TYPE_INVALID);
+	dbus_error_init(&err);
+	reply = dbus_connection_send_with_reply_and_block(conn, req, 2000, &err);
+	dbus_message_unref(req);
+	if(reply == NULL || !dbus_message_get_args(reply, &err, DBUS_TYPE_UNIX_FD, &inhibit_fd,
+						   DBUS_TYPE_INVALID)) {
+		g15daemon_log(LOG_WARNING, "logind: shutdown inhibitor lock failed: %s - backlights may stay on after poweroff",
+			      err.message);
+		dbus_error_free(&err);
+		inhibit_fd = -1;
+	}
+	if(reply != NULL)
+		dbus_message_unref(reply);
+}
+
+static void release_inhibitor(void) {
+	if(inhibit_fd < 0)
+		return;
+	close(inhibit_fd);
+	inhibit_fd = -1;
+}
+
 static DBusHandlerResult logind_filter_cb(DBusConnection *c, DBusMessage *msg, void *userdata) {
 	const char *path;
 	(void)c;
 	(void)userdata;
+
+	if(dbus_message_is_signal(msg, LOGIND_MANAGER_INTERFACE, "PrepareForShutdown")) {
+		dbus_bool_t start = FALSE;
+		if(dbus_message_get_args(msg, NULL, DBUS_TYPE_BOOLEAN, &start, DBUS_TYPE_INVALID))
+			shutting_down = start ? 1 : 0;
+		return DBUS_HANDLER_RESULT_HANDLED;
+	}
 
 	if(!dbus_message_is_signal(msg, DBUS_PROPERTIES_INTERFACE, "PropertiesChanged"))
 		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
@@ -226,6 +291,7 @@ static DBusHandlerResult logind_filter_cb(DBusConnection *c, DBusMessage *msg, v
 static void logind_disconnect(void) {
 	if(conn == NULL)
 		return;
+	release_inhibitor();
 	dbus_connection_remove_filter(conn, logind_filter_cb, NULL);
 	dbus_connection_close(conn);
 	dbus_connection_unref(conn);
@@ -235,6 +301,9 @@ static void logind_disconnect(void) {
 static int logind_connect(void) {
 	const char *rule = "type='signal',interface='" DBUS_PROPERTIES_INTERFACE "',"
 			   "member='PropertiesChanged',sender='" LOGIND_SERVICE "'";
+	const char *shutdown_rule = "type='signal',interface='" LOGIND_MANAGER_INTERFACE "',"
+				    "member='PrepareForShutdown',path='" LOGIND_MANAGER_PATH "',"
+				    "sender='" LOGIND_SERVICE "'";
 	DBusError err;
 
 	dbus_error_init(&err);
@@ -251,6 +320,8 @@ static int logind_connect(void) {
 	dbus_connection_set_exit_on_disconnect(conn, FALSE);
 
 	dbus_bus_add_match(conn, rule, &err);
+	if(!dbus_error_is_set(&err))
+		dbus_bus_add_match(conn, shutdown_rule, &err);
 	dbus_connection_flush(conn);
 	if(dbus_error_is_set(&err)) {
 		g15daemon_log(LOG_WARNING, "logind: add_match failed: %s", err.message);
@@ -262,7 +333,9 @@ static int logind_connect(void) {
 
 	active_session_path[0] = '\0';
 	refresh_active_session();
-	g15daemon_log(LOG_INFO, "logind: watching seat0 for idle state");
+	if(!shutting_down)
+		take_inhibitor();
+	g15daemon_log(LOG_INFO, "logind: watching seat0 for idle state and system shutdown");
 	return 1;
 }
 
@@ -342,11 +415,28 @@ static int logind_run(void *args) {
 		return G15_PLUGIN_OK;
 	}
 
-	if(have_state && session_idle != applied_idle) {
+	if(shutting_down != applied_shutdown) {
+		applied_shutdown = shutting_down;
+		if(applied_shutdown) {
+			g15daemon_log(LOG_NOTICE, "logind: system shutting down - LCD backlight off");
+			g15daemon_set_backlight_idle(masterlist, G15_BACKLIGHT_LCD, 0);
+			release_inhibitor();	/* LCD is off - let logind continue */
+		}
+		else {
+			g15daemon_log(LOG_NOTICE, "logind: shutdown cancelled - backlight restored");
+			g15daemon_set_backlight_idle(masterlist, applied_idle ? G15_BACKLIGHT_LCD : 0, 0);
+			take_inhibitor();
+		}
+	}
+
+	/* the shutdown keeps the LCD dark - idle changes wait until it's
+	 * cancelled */
+	if(!applied_shutdown && have_state && session_idle != applied_idle) {
 		applied_idle = session_idle;
-		g15daemon_log(LOG_INFO, "logind: session %s - backlight %s",
-			      applied_idle ? "idle" : "active", applied_idle ? "off" : "restored");
-		g15daemon_set_backlight_idle(masterlist, applied_idle, wake_bright);
+		g15daemon_set_backlight_idle(masterlist, applied_idle ? G15_BACKLIGHT_LCD : 0, wake_bright);
+		g15daemon_log(LOG_NOTICE, "logind: session %s - LCD backlight %s %u",
+			      applied_idle ? "idle" : "active", applied_idle ? "off, saved" : "restored to",
+			      masterlist->lcd_backlight_state);
 		run_command(applied_idle ? idle_cmd : active_cmd);
 	}
 	return G15_PLUGIN_OK;
@@ -357,7 +447,7 @@ static void logind_exit(void *args) {
 
 	logind_disconnect();
 	/* don't leave the stored levels masked if only this plugin goes away */
-	if(applied_idle && !leaving)
+	if((applied_idle || applied_shutdown) && !leaving)
 		g15daemon_set_backlight_idle(masterlist, 0, 0);
 	free(idle_cmd);
 	free(active_cmd);

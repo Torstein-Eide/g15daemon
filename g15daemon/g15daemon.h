@@ -258,8 +258,9 @@ struct g15daemon_s {
 	 * updates and push them to the hardware. */
 	unsigned int lcd_backlight_state;
 	unsigned int kb_backlight_state;
-	/* set while the session is idle (g15_plugin_logind): both backlights
-	 * are forced dark, the levels above are kept for restoring on wake */
+	/* G15_BACKLIGHT_* mask of lights forced dark by g15_plugin_logind -
+	 * both while the session is idle, the LCD only at poweroff. The
+	 * levels above are kept for restoring once unmasked. */
 	unsigned int backlight_idle;
 	unsigned int remote_keyhandler_sock;
 	/* systemd status reporting - see sd_notify_util.h and main.c */
@@ -360,9 +361,10 @@ void g15daemon_lcdnode_cycle(g15daemon_t *masterlist);
 #define G15_BACKLIGHT_LCD 1
 #define G15_BACKLIGHT_KB 2
 unsigned int g15daemon_set_backlight(g15daemon_t *masterlist, unsigned int which, unsigned int level);
-/* force both backlights dark while idle, restoring the stored levels (or
- * G15_BRIGHTNESS_BRIGHT if wake_bright) once no longer idle */
-void g15daemon_set_backlight_idle(g15daemon_t *masterlist, unsigned int idle, unsigned int wake_bright);
+/* force the backlights in the G15_BACKLIGHT_* mask 'dark' dark (0: none),
+ * restoring the stored levels (or G15_BRIGHTNESS_BRIGHT if wake_bright) of
+ * those no longer in it. Only lights whose state changes are written. */
+void g15daemon_set_backlight_idle(g15daemon_t *masterlist, unsigned int dark, unsigned int wake_bright);
 /* re-push the current backlight state to the hardware (after a re-init) */
 void g15daemon_reapply_backlight(g15daemon_t *masterlist);
 /* read the real levels back and adopt outside changes (LIBG15_VERSION >= 1202) */
