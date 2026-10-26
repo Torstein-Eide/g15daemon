@@ -85,11 +85,13 @@ int g15daemon_send_event(void *caller, unsigned int event, unsigned long value){
 					if((send(lcd->masterlist->remote_keyhandler_sock,(void *)&newevent->value,sizeof(newevent->value),0))<0)
 						g15daemon_log(LOG_WARNING,"Error in send: %s\n",strerror(errno));
 				}
-				if(value & G15_KEY_LIGHT){ // the backlight key was pressed - cycle the global level
+				if(value & G15_KEY_LIGHT){ // the backlight key was pressed - cycle the LCD level
 					/* only reported by libg15's libusb backend - on Linux the
-					 * kernel driver handles the light key itself */
-					g15daemon_set_backlight(lcd->masterlist, G15_BACKLIGHT_LCD|G15_BACKLIGHT_KB,
-								(lcd->masterlist->kb_backlight_state + 1) % 3);
+					 * kernel driver handles the light key itself. The keyboard
+					 * light is left to UPower/the hardware, see
+					 * g15_plugin_logind.c */
+					g15daemon_set_backlight(lcd->masterlist, G15_BACKLIGHT_LCD,
+								(lcd->masterlist->lcd_backlight_state + 1) % 3);
 				}
 				if(value & G15_KEY_M1) {
 					setLEDs(G15_LED_M1);
