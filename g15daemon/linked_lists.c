@@ -233,6 +233,7 @@ lcdnode_t *g15daemon_lcdnode_add_named(g15daemon_t **masterlist, const char *nam
 /* cycle through connected client displays */
 void g15daemon_lcdnode_cycle(g15daemon_t *masterlist){
 	lcdnode_t *current_screen = NULL;
+	unsigned long laps = 0;
 	pthread_mutex_lock(&lcdlist_mutex);
 	skip:
 		current_screen = masterlist->current;
@@ -253,7 +254,9 @@ void g15daemon_lcdnode_cycle(g15daemon_t *masterlist){
 	else {
 		masterlist->current = masterlist->current->prev;
 	}
-	if(masterlist->current->lcd->never_select==1) {
+	/* skip never_select screens, but give up after one lap - if every
+	 * screen is never_select this looped forever with the lock held */
+	if(masterlist->current->lcd->never_select==1 && ++laps <= masterlist->numclients + 1) {
 		goto skip;
 	}
 	masterlist->current->last_priority =  masterlist->current;

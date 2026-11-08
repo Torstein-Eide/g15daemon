@@ -188,3 +188,4 @@
 * BugFix: A failed accept() no longer registers a phantom client with fd -1
 * BugFix: If a client thread can't be started, its screen is removed again instead of staying in the list (blank, possibly in front) forever
 * BugFix: WBMP ('W') client buffers: images taller than the LCD no longer put the stream out of step, the width is decoded as a WBMP multi-byte integer, and short reads end the connection
+* BugFix: The cycle key no longer hangs the daemon when every screen is marked never-select
