@@ -4,6 +4,7 @@ g15daemon 3.1.2 buster; urgency=low
  * BugFix: Clean shutdown with clients connected
  * BugFix: Client disconnects can no longer kill the daemon via SIGPIPE
  * BugFix: Races between key presses, redraws and client disconnects
+ * Change: Simultaneous TCP clients limited to MAX_CLIENTS (10)
 
 g15daemon 3.1.1 buster; urgency=low
  * BugFix: Digital clock colon and digit spacing

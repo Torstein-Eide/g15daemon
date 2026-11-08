@@ -179,3 +179,4 @@
 * BugFix: Shutdown waits (up to 5s) for plugin and client threads before freeing the client list, instead of freeing it under still-running client threads
 * BugFix: SIGPIPE is ignored, so a key press as a client disconnects can no longer kill the daemon when run outside systemd (OpenRC/runit/66 scripts, -d from a shell)
 * BugFix: Thread-safety: key presses are dispatched with the client list locked (a disconnecting popup could free the screen being sent a key), redraw requests use a proper mutex and are coalesced, and a client socket is closed only after its screen is removed (keys could go to a reused fd)
+* Change: At most 10 TCP clients (MAX_CLIENTS) are accepted at once; further connections are closed and logged. It was only the listen backlog before, so any local process could open unlimited screens

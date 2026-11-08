@@ -433,6 +433,17 @@ static int g15_clientconnect (g15daemon_t **g15daemon, int listening_socket) {
 		}
 	}
 
+	/* MAX_CLIENTS used to be only the listen() backlog - any local
+	 * process could open unlimited screens, each with its own thread */
+	pthread_mutex_lock(&clients_mutex);
+	if(conn_s >= 0 && client_threads >= MAX_CLIENTS) {
+		pthread_mutex_unlock(&clients_mutex);
+		g15daemon_log(LOG_WARNING, "Rejecting client: already %d connected (max %d)", MAX_CLIENTS, MAX_CLIENTS);
+		close(conn_s);
+		return 0;
+	}
+	pthread_mutex_unlock(&clients_mutex);
+
 	/* resolve the name first - it decides whether the new client may take
 	 * the foreground (see g15daemon_lcdnode_add_named()) */
 	g15_resolve_peer_name(conn_s, peer_name, sizeof(peer_name), &peer_pid);
