@@ -667,50 +667,34 @@ int g15daemon_cfg_write_string(config_section_t *section, char *key, char *val){
 	return 0;
 }
 
-/* remoe a key/value pair from named section */
+/* remove a key/value pair from named section. The list: section->items is
+ * the first item, whose ->head is the last one (where
+ * g15daemon_cfg_write_string() appends). This used to free the only item
+ * twice and point the append cursor at the wrong item when removing from
+ * the middle, dropping everything after it on the next append. */
 int g15daemon_cfg_remove_key(config_section_t *section, char *key){
-	config_items_t *new = NULL;
-	config_items_t *next = NULL;
-	config_items_t *prev = NULL;
+	config_items_t *item, *prev, *next;
 	if(section==NULL)
 		return -1;
-	if((uf_search_confitem(section, key))){
-		new=uf_search_confitem(section, key);
-		prev=new->prev;
-		next=new->next;
-		if(prev){
-			prev->next=new->next;
-		}
-		else{
-			if(!next) {
-				free(section->items);
-				section->items=NULL;
-			}
-			else
-				section->items=next;
-		}
-	if(new->head==new){
-		if(prev){
-			prev->head = prev;
-			section->items->head=prev;
-		}
-		if(!prev){
-			if(!next) {
-				free(section->items);
-				section->items=NULL;
-			}
-		}
-	}
-	if(next){
-		if(prev)
+	if((item=uf_search_confitem(section, key))==NULL)
+		return 0;
+	prev=item->prev;
+	next=item->next;
+	if(prev)
+		prev->next=next;
+	if(next)
 		next->prev=prev;
-		else
-		next->prev=NULL;
+	if(section->items==item) {
+		config_items_t *last = item->head;
+		section->items=next;
+		if(next)
+			next->head = (last==item) ? next : last;
 	}
-		free(new->key);
-		free(new->value);
-		free(new);
-	}
+	else if(section->items->head==item)
+		section->items->head=prev;
+	free(item->key);
+	free(item->value);
+	free(item);
 	return 0;
 }
 
