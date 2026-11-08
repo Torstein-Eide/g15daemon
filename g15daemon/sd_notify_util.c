@@ -8,10 +8,10 @@
 #include <systemd/sd-daemon.h>
 
 static void sd_notify_status(const char *prefix, const char *status_fmt, va_list ap) {
-	char status[256];
+	char status[512];
 	vsnprintf(status, sizeof(status), status_fmt, ap);
 
-	char msg[320];
+	char msg[576];
 	snprintf(msg, sizeof(msg), "%sSTATUS=%s", prefix, status);
 	sd_notify(0, msg);
 }
