@@ -183,3 +183,4 @@
 * BugFix: /dev/uinput is opened before the privilege drop; the uinput plugin no longer switches the whole process back to root at runtime (other threads ran as root meanwhile, and the daemon stayed root if uinput could not be opened)
 * BugFix: g15daemon.conf is only rewritten at shutdown when something changed, and then via a temp file, fsync and rename (a symlinked conf stays a symlink), so a power cut during poweroff can no longer leave it empty; write errors are now detected
 * BugFix: The foreground screen's M-key LEDs no longer overwrite those set by a client key handler (macro recorder)
+* BugFix: M1-M3 key LED writes are serialized with the other LCD/LED writes

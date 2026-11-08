@@ -98,15 +98,16 @@ int g15daemon_send_event(void *caller, unsigned int event, unsigned long value){
 					g15daemon_set_backlight(lcd->masterlist, G15_BACKLIGHT_LCD,
 								(lcd->masterlist->lcd_backlight_state + 1) % 3);
 				}
-				if(value & G15_KEY_M1) {
-					setLEDs(G15_LED_M1);
+				if(value & (G15_KEY_M1|G15_KEY_M2|G15_KEY_M3)) {
+					pthread_mutex_lock(&g15lib_mutex);
+					if(value & G15_KEY_M1)
+						setLEDs(G15_LED_M1);
+					if(value & G15_KEY_M2)
+						setLEDs(G15_LED_M2);
+					if(value & G15_KEY_M3)
+						setLEDs(G15_LED_M3);
+					pthread_mutex_unlock(&g15lib_mutex);
 				}
-				if(value & G15_KEY_M2) {
-					setLEDs(G15_LED_M2);
-				}
-				if(value & G15_KEY_M3) {
-                    setLEDs(G15_LED_M3);
-                }
 				free(newevent);
 			}
 			else{
