@@ -9,6 +9,7 @@ g15daemon 3.1.2 buster; urgency=low
  * BugFix: Config written atomically and only when changed
  * libg15daemon_client: IS_FOREGROUND no longer reports true on timeout
  * Stale pidfile no longer blocks startup
+ * No crash cycling screens with the Clock plugin disabled
 
 g15daemon 3.1.1 buster; urgency=low
  * BugFix: Digital clock colon and digit spacing

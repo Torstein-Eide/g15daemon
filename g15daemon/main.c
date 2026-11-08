@@ -60,6 +60,15 @@ static volatile int device_gone = 0;
 pthread_mutex_t g15lib_mutex;
 pthread_mutex_t g15keys_mutex;
 
+/* the screen's event handler, or NULL - the placeholder tail node from
+ * ll_lcdlist_init() keeps info NULL when no LCD plugin (normally Clock)
+ * claimed it, e.g. with Clock disabled in [PLUGINS] */
+static int *(*event_listener(lcd_t *lcd))(plugin_event_t *) {
+	if(lcd->g15plugin == NULL || lcd->g15plugin->info == NULL)
+		return NULL;
+	return (void*)lcd->g15plugin->info->event_handler;
+}
+
 /* send event to foreground client's eventlistener */
 int g15daemon_send_event(void *caller, unsigned int event, unsigned long value){
 	switch(event) {
@@ -67,14 +76,16 @@ int g15daemon_send_event(void *caller, unsigned int event, unsigned long value){
 			static unsigned long lastkeys;
 			if(!(value & cycle_key) && !(lastkeys & cycle_key)){
 				lcd_t *lcd = (lcd_t*)caller;
-				if(!lcd->g15plugin->info)
-					break;
-				int *(*plugin_listener)(plugin_event_t *newevent) = (void*)lcd->g15plugin->info->event_handler;
+				/* no handler (bare placeholder screen): the keys still go
+				 * to uinput / the key handler below - this used to break
+				 * out, so G-keys did nothing while it was in front */
+				int *(*plugin_listener)(plugin_event_t *newevent) = event_listener(lcd);
 				plugin_event_t *newevent=g15daemon_xmalloc(sizeof(plugin_event_t));
 				newevent->event = event;
 				newevent->value = value;
 				newevent->lcd = lcd;
-				(*plugin_listener)((void*)newevent);
+				if(plugin_listener)
+					(*plugin_listener)((void*)newevent);
 				/* hack - keyboard events are always sent from the foreground even when they aren't
 				send keypress event to the OS keyboard_handler plugin */
 				if(lcd->masterlist->keyboard_handler != NULL && lcd->masterlist->remote_keyhandler_sock==0) {
@@ -119,9 +130,9 @@ int g15daemon_send_event(void *caller, unsigned int event, unsigned long value){
 					if ((unclick-clicktime)<500) {
 						g15daemon_lcdnode_cycle(masterlist);
 					}
-					else{
+					else if(event_listener(lcd)){
 						plugin_event_t *clickevent=g15daemon_xmalloc(sizeof(plugin_event_t));
-						int *(*plugin_listener)(plugin_event_t *clickevent) = (void*)lcd->g15plugin->info->event_handler;
+						int *(*plugin_listener)(plugin_event_t *clickevent) = event_listener(lcd);
 						clickevent->event = event;
 						clickevent->value = value|cycle_key;
 						clickevent->lcd = lcd;
@@ -184,8 +195,11 @@ int g15daemon_send_event(void *caller, unsigned int event, unsigned long value){
 			g15daemon_send_refresh((lcd_t*)caller);
 		default: {
 			lcd_t *lcd = (lcd_t*)caller;
-			int *(*plugin_listener)(plugin_event_t *newevent) = (void*)lcd->g15plugin->info->event_handler;
-			plugin_event_t *newevent=g15daemon_xmalloc(sizeof(plugin_event_t));
+			int *(*plugin_listener)(plugin_event_t *newevent) = event_listener(lcd);
+			plugin_event_t *newevent;
+			if(plugin_listener == NULL)
+				break;
+			newevent=g15daemon_xmalloc(sizeof(plugin_event_t));
 			newevent->event = event;
 			newevent->value = value;
 			newevent->lcd = lcd;
