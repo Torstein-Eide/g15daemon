@@ -199,3 +199,4 @@
 * BugFix: L1 tap-vs-hold timing uses a monotonic clock, so a clock change can't turn a tap into a hold
 * BugFix: The systemd status line is no longer cut off with long foreground screen names
 * BugFix: ';' comments containing ':' or '=' (e.g. the shipped "; Locale: ..." notes) are no longer cut off when g15daemon.conf is written back
+* BugFix: Key events are sent to clients whole or not at all (a partial non-blocking write could misalign every later key), and a client that doesn't read its keys no longer logs a warning per key press

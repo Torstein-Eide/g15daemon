@@ -353,6 +353,9 @@ int g15daemon_cfg_write_bool(config_section_t *section, char *key, unsigned int 
 int g15daemon_cfg_remove_key(config_section_t *section, char *key);
 /* send event to foreground client's eventlistener */
 int g15daemon_send_event(void *caller, unsigned int event, unsigned long value);
+/* send a key state to a client socket without blocking (whole value or
+ * nothing) */
+void g15daemon_send_key(int sock, unsigned long value);
 /* open named plugin */
 void * g15daemon_dlopen_plugin(char *name,unsigned int library);
 /* close plugin with handle <handle> */

@@ -32,6 +32,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
+#include <poll.h>
 #include <ctype.h>
 #include <sys/time.h>
 #ifdef HAVE_CONFIG_H
@@ -287,6 +289,33 @@ int uf_read_keypresses(unsigned int *keypresses, unsigned int timeout){
 		pthread_mutex_unlock(&g15keys_mutex);
 	#endif
 	return retval;
+}
+
+/* Send one key state to a client without blocking (the caller holds
+ * lcdlist_mutex). A client that isn't reading misses the key - logged at
+ * debug only, a display-only client never reads. Only whole values are
+ * sent: a partial write would misalign every later value the client
+ * reads, so the connection is shut down instead and its thread ends. */
+void g15daemon_send_key(int sock, unsigned long value) {
+	struct pollfd pfd;
+	ssize_t n;
+
+	pfd.fd = sock;
+	pfd.events = POLLOUT;
+	pfd.revents = 0;
+	if(poll(&pfd, 1, 0) != 1 || !(pfd.revents & POLLOUT)) {
+		g15daemon_log(LOG_DEBUG, "Client fd %d not reading - key dropped", sock);
+		return;
+	}
+	n = send(sock, &value, sizeof(value), MSG_DONTWAIT);
+	if(n == (ssize_t)sizeof(value))
+		return;
+	if(n > 0) {
+		g15daemon_log(LOG_WARNING, "Partial key write to client fd %d - disconnecting it", sock);
+		shutdown(sock, SHUT_RDWR);
+	}
+	else
+		g15daemon_log(LOG_DEBUG, "Key send to client fd %d failed: %s", sock, strerror(errno));
 }
 
 /* Sleep routine (hackish). */

@@ -83,10 +83,8 @@ int g15daemon_send_event(void *caller, unsigned int event, unsigned long value){
 				}
 				// if we have a remote keyhandler, send the key. FIXME: we should do this from the net plugin
 				if(lcd->masterlist->remote_keyhandler_sock!=0) {
-					/* MSG_DONTWAIT: sent with lcdlist_mutex held - a client
-					 * not reading its keys must not stall the daemon */
-					if((send(lcd->masterlist->remote_keyhandler_sock,(void *)&newevent->value,sizeof(newevent->value),MSG_DONTWAIT))<0)
-						g15daemon_log(LOG_WARNING,"Error in send: %s\n",strerror(errno));
+					/* non-blocking - sent with lcdlist_mutex held */
+					g15daemon_send_key(lcd->masterlist->remote_keyhandler_sock, newevent->value);
 				}
 				if(value & G15_KEY_LIGHT){ // the backlight key was pressed - cycle the LCD level
 					/* only reported by libg15's libusb backend - on Linux the

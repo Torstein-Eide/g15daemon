@@ -527,10 +527,8 @@ static int server_events(plugin_event_t *event) {
 	switch (event->event){
 		case G15_EVENT_KEYPRESS:{
 			if(lcd->connection && lcd->masterlist->remote_keyhandler_sock!=lcd->connection) { /* server client */
-				/* MSG_DONTWAIT: called with lcdlist_mutex held - a client
-				 * not reading its keys must not stall the daemon */
-				if((send(lcd->connection,(void *)&event->value,sizeof(event->value),MSG_DONTWAIT))<0)
-					g15daemon_log(LOG_WARNING,"Error in send: %s\n",strerror(errno));
+				/* non-blocking - called with lcdlist_mutex held */
+				g15daemon_send_key(lcd->connection, event->value);
 			}
 			break;
 		}
