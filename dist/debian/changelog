@@ -1,5 +1,6 @@
 g15daemon 3.1.2 buster; urgency=low
  * BugFix: Config values containing ":" or "=" no longer truncated
+ * BugFix: Keyboard unplug or a static screen no longer trips the systemd watchdog
 
 g15daemon 3.1.1 buster; urgency=low
  * BugFix: Digital clock colon and digit spacing

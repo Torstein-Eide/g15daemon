@@ -325,8 +325,9 @@ int internal_generic_eventhandler(plugin_event_t *myevent);
 /* the following functions are available for use by plugins */
 /* send notification of LCD buffer update */
 void g15daemon_send_refresh(lcd_t *lcd);
-/* wait on notification of LCD buffer update */
-void g15daemon_wait_refresh();
+/* wait on notification of LCD buffer update - 1 if there was one, 0 after
+ * a 1s timeout */
+int g15daemon_wait_refresh();
 /* create a new section */
 config_section_t *g15daemon_cfg_load_section(g15daemon_t *masterlist,char *name);
 /* return string value from key in sectionname */

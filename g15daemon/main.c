@@ -53,6 +53,9 @@ unsigned int cycle_key;
 unsigned int client_handles_keys = 0;
 struct lcd_t *keyhandler = NULL;
 static int loaded_plugins = 0;
+/* set by keyboard_watch_thread while the keyboard is unplugged and being
+ * re-initialised - the draw thread skips hardware writes meanwhile */
+static volatile int device_gone = 0;
 
 /* definitions (storage) for the process-wide mutexes declared extern in
  * g15daemon.h - see the comment there for why these must not be static */
@@ -250,18 +253,29 @@ static void *keyboard_watch_thread(void *lcdlist){
 			g15daemon_send_event(masterlist->current->lcd,G15_EVENT_KEYPRESS, keypresses);
 			lastkeys = keypresses;
 		}else if(retval == -ENODEV && LIBG15_VERSION>=1200) {
-			pthread_mutex_lock(&g15lib_mutex);
-			while(((retval=re_initLibG15()) != G15_NO_ERROR) && !leaving){
-				g15daemon_log(LOG_WARNING,"Keyboard has gone.. Retrying\n");
+			/* g15lib_mutex only around each attempt: holding it across
+			 * the sleeps blocked the draw thread (inside lcdlist_mutex)
+			 * for as long as the keyboard was gone, which also stopped
+			 * the watchdog pings and got the daemon killed */
+			device_gone = 1;
+			g15daemon_log(LOG_WARNING,"Keyboard has gone.. Retrying\n");
+			while(!leaving){
+				pthread_mutex_lock(&g15lib_mutex);
+				retval=re_initLibG15();
+				pthread_mutex_unlock(&g15lib_mutex);
+				if(retval == G15_NO_ERROR)
+					break;
 				sleep(1);
 			}
-		if(!leaving) {
-			masterlist->current->lcd->state_changed=1;
-			g15daemon_send_refresh(masterlist->current->lcd);
-		}
-		pthread_mutex_unlock(&g15lib_mutex);
-		if(!leaving)
-			g15daemon_reapply_backlight(masterlist);
+			device_gone = 0;
+			if(!leaving) {
+				g15daemon_log(LOG_NOTICE,"Keyboard is back");
+				pthread_mutex_lock(&lcdlist_mutex);
+				masterlist->current->lcd->state_changed=1;
+				g15daemon_send_refresh(masterlist->current->lcd);
+				pthread_mutex_unlock(&lcdlist_mutex);
+				g15daemon_reapply_backlight(masterlist);
+			}
 		}
 	g15daemon_msleep(40);
 	}
@@ -289,52 +303,52 @@ static void *lcd_draw_thread(void *lcdlist){
 	lcd_t *displaying = masterlist->tail->lcd;
 	memset(displaying->buf,0,1024);
 	/* sd_notify() throttling - see g15u_sd_notify_status/_watchdog calls
-	 * below. This loop already wakes at least once/second even when idle
-	 * (g15daemon_wait_refresh()'s internal 1s retry), so no extra thread
-	 * is needed to drive these. */
+	 * below. This loop wakes at least once/second even when idle
+	 * (g15daemon_wait_refresh() returns 0 after 1s without a refresh), so
+	 * no extra thread is needed to drive these. */
 	struct g15_timer status_timer, watchdog_timer;
 	g15_timer_start(&status_timer);
 	g15_timer_start(&watchdog_timer);
 	g15daemon_sleep(2);
 
 	while (!leaving) {
-		/* wait until a client has updated */
-		g15daemon_wait_refresh();
-		pthread_mutex_lock(&lcdlist_mutex);
-		displaying = masterlist->current->lcd;
-		/* monitor 'fps' - due to the TCP protocol, some frames will be bunched up.
-		discard excess to reduce load on the bus
-		fps = 1000 / (g15daemon_gettime_ms() - lastscreentime);
-		if the current screen is less than 20ms from the previous (equivelant to 50fps) delay it
-		this allows a real-world fps of 40fps with no almost frame loss and reduces peak usb bus-load */
-		g15daemon_log(LOG_DEBUG,"Updating LCD");
-		{
-			struct g15_timer draw_timer;
-			g15_timer_start(&draw_timer);
-			uf_write_buf_to_g15(displaying);
-			masterlist->last_draw_ms = g15_timer_ms(&draw_timer);
-			if(masterlist->min_draw_ms == 0 || masterlist->last_draw_ms < masterlist->min_draw_ms)
-				masterlist->min_draw_ms = masterlist->last_draw_ms;
-			if(masterlist->last_draw_ms > masterlist->max_draw_ms)
-				masterlist->max_draw_ms = masterlist->last_draw_ms;
-			g15daemon_log(LOG_DEBUG,"LCD draw took %.2f ms", masterlist->last_draw_ms);
-		}
-		g15daemon_log(LOG_DEBUG,"LCD Update Complete");
-
-		if(displaying->state_changed){
-			pthread_mutex_lock(&g15lib_mutex);
-			setLCDContrast(displaying->contrast_state);
-			setLEDs(displaying->mkey_state);
-			if(displaying->masterlist->remote_keyhandler_sock==0) // only allow mled control if the macro recorder isnt running 
-				setLEDs(displaying->mkey_state);  
-			pthread_mutex_unlock(&g15lib_mutex);
-				displaying->state_changed = 0;
-		}
-
+		/* wait until a client has updated, or 1s has passed */
+		int refreshed = g15daemon_wait_refresh();
+		/* before any hardware I/O, so a write stuck behind a keyboard
+		 * re-init can't stop the pings */
 		if(g15_timer_ms(&watchdog_timer) >= 10000.0) {
 			g15u_sd_notify_watchdog();
 			g15_timer_start(&watchdog_timer);
 		}
+		if(device_gone)
+			continue;
+		pthread_mutex_lock(&lcdlist_mutex);
+		displaying = masterlist->current->lcd;
+		if(refreshed) {
+			g15daemon_log(LOG_DEBUG,"Updating LCD");
+			{
+				struct g15_timer draw_timer;
+				g15_timer_start(&draw_timer);
+				uf_write_buf_to_g15(displaying);
+				masterlist->last_draw_ms = g15_timer_ms(&draw_timer);
+				if(masterlist->min_draw_ms == 0 || masterlist->last_draw_ms < masterlist->min_draw_ms)
+					masterlist->min_draw_ms = masterlist->last_draw_ms;
+				if(masterlist->last_draw_ms > masterlist->max_draw_ms)
+					masterlist->max_draw_ms = masterlist->last_draw_ms;
+				g15daemon_log(LOG_DEBUG,"LCD draw took %.2f ms", masterlist->last_draw_ms);
+			}
+
+			if(displaying->state_changed){
+				pthread_mutex_lock(&g15lib_mutex);
+				setLCDContrast(displaying->contrast_state);
+				setLEDs(displaying->mkey_state);
+				if(displaying->masterlist->remote_keyhandler_sock==0) // only allow mled control if the macro recorder isnt running 
+					setLEDs(displaying->mkey_state);  
+				pthread_mutex_unlock(&g15lib_mutex);
+				displaying->state_changed = 0;
+			}
+		}
+
 		if(g15_timer_ms(&status_timer) >= 5000.0) {
 			struct timespec now;
 			char uptime_str[32];

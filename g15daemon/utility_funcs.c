@@ -86,25 +86,27 @@ void g15daemon_send_refresh(lcd_t *lcd) {
 	}
 }
 
-void g15daemon_wait_refresh() {
+/* returns 1 when a client asked for a redraw, 0 after 1s without one (or
+ * when leaving) - the draw thread uses the timeout as its clock for the
+ * watchdog and status updates */
+int g15daemon_wait_refresh() {
 	pthread_mutex_t dummy_mutex;
 	struct timespec timeout;
-	int retval;
 	if(refresh_pending<1) {
 		/* Create a dummy mutex which doesn't unlock for sure while waiting. */
 		pthread_mutex_init(&dummy_mutex, NULL);
 		pthread_mutex_lock(&dummy_mutex);
-	start:
 		time(&timeout.tv_sec);
 		timeout.tv_sec += 1;
 		timeout.tv_nsec = 0L;
-		retval=pthread_cond_timedwait(&lcd_refresh, &dummy_mutex, &timeout);
-		if(!leaving && retval == ETIMEDOUT)
-			goto start;
+		pthread_cond_timedwait(&lcd_refresh, &dummy_mutex, &timeout);
 		pthread_mutex_unlock(&dummy_mutex);
 		pthread_mutex_destroy(&dummy_mutex);
+		if(refresh_pending<1)
+			return 0;
 	}
 	refresh_pending--;
+	return 1;
 }
 
 void g15daemon_quit_refresh() {
