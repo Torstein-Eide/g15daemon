@@ -395,10 +395,13 @@ static int lcdclock(lcd_t *lcd){
 	// redrawn every 100ms but only pushed to the LCD when a pixel changed.
 	// lcd->buf is no longer cleared first: the draw thread could catch it
 	// blank between the clear and the copy, which flickered
+	// lcdlist_mutex: the draw thread reads lcd->buf under it
+	pthread_mutex_lock(&lcdlist_mutex);
 	if (memcmp(lcd->buf, canvas->buffer, G15_BUFFER_LEN) != 0) {
 		memcpy (lcd->buf, canvas->buffer, G15_BUFFER_LEN);
 		g15daemon_send_refresh(lcd);
 	}
+	pthread_mutex_unlock(&lcdlist_mutex);
 	free(canvas);
 	return ret;
 }

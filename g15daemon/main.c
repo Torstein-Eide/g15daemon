@@ -85,7 +85,9 @@ int g15daemon_send_event(void *caller, unsigned int event, unsigned long value){
 				}
 				// if we have a remote keyhandler, send the key. FIXME: we should do this from the net plugin
 				if(lcd->masterlist->remote_keyhandler_sock!=0) {
-					if((send(lcd->masterlist->remote_keyhandler_sock,(void *)&newevent->value,sizeof(newevent->value),0))<0)
+					/* MSG_DONTWAIT: sent with lcdlist_mutex held - a client
+					 * not reading its keys must not stall the daemon */
+					if((send(lcd->masterlist->remote_keyhandler_sock,(void *)&newevent->value,sizeof(newevent->value),MSG_DONTWAIT))<0)
 						g15daemon_log(LOG_WARNING,"Error in send: %s\n",strerror(errno));
 				}
 				if(value & G15_KEY_LIGHT){ // the backlight key was pressed - cycle the LCD level
@@ -250,7 +252,12 @@ static void *keyboard_watch_thread(void *lcdlist){
 			retval = uf_read_keypresses(&keypresses, 20);
 		}
 		if(retval == G15_NO_ERROR && lastkeys != keypresses) {
+			/* held across the dispatch so the foreground node can't be
+			 * freed by a disconnecting client meanwhile (recursive - the
+			 * cycle key re-locks it in g15daemon_lcdnode_cycle()) */
+			pthread_mutex_lock(&lcdlist_mutex);
 			g15daemon_send_event(masterlist->current->lcd,G15_EVENT_KEYPRESS, keypresses);
+			pthread_mutex_unlock(&lcdlist_mutex);
 			lastkeys = keypresses;
 		}else if(retval == -ENODEV && LIBG15_VERSION>=1200) {
 			/* g15lib_mutex only around each attempt: holding it across

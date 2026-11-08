@@ -60,7 +60,15 @@ static void ll_quit_lcd (lcd_t * lcd) {
 /* initialise a new masterlist, and add an initial node at the tail (used for the clock) */
 g15daemon_t *ll_lcdlist_init () {
 	g15daemon_t *masterlist = NULL;
-	pthread_mutex_init(&lcdlist_mutex, NULL);
+	{
+		/* recursive: the keyboard thread holds it while dispatching a
+		 * key, and the cycle key / priority requests lock it again */
+		pthread_mutexattr_t attr;
+		pthread_mutexattr_init(&attr);
+		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+		pthread_mutex_init(&lcdlist_mutex, &attr);
+		pthread_mutexattr_destroy(&attr);
+	}
 	pthread_mutex_lock(&lcdlist_mutex);
 	masterlist = g15daemon_xmalloc(sizeof(g15daemon_t));
 	masterlist->head = g15daemon_xmalloc(sizeof(lcdnode_t));
@@ -249,9 +257,9 @@ void g15daemon_lcdnode_cycle(g15daemon_t *masterlist){
 	}
 	masterlist->current->last_priority =  masterlist->current;
 	remember_selected_screen(masterlist, masterlist->current->lcd);
-	pthread_mutex_unlock(&lcdlist_mutex);
 	masterlist->current->lcd->usr_foreground=1;
 	g15daemon_send_event(masterlist->current->lcd, G15_EVENT_VISIBILITY_CHANGED, SCR_VISIBLE);
+	pthread_mutex_unlock(&lcdlist_mutex);
 }
 
 void g15daemon_lcdnode_remove (lcdnode_t *oldnode) {

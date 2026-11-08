@@ -383,18 +383,23 @@ static void *lcd_client_thread(void *display) {
 exitthread:
 	/* before close(), while getpeername() still works */
 	log_client_event(client_lcd, "disconnected");
-	if(client_lcd->masterlist->remote_keyhandler_sock==client_sock)
-		client_lcd->masterlist->remote_keyhandler_sock=0;
-	close(client_sock);
-		free(tmpbuf);
-		{
-			/* client_lcd is freed inside lcdnode_remove(), so capture the
-			 * masterlist pointer for the post-removal client-list log
-			 * before that happens. */
-			g15daemon_t *masterlist = client_lcd->masterlist;
-			g15daemon_lcdnode_remove(display);
-			log_client_list(masterlist);
-		}
+	free(tmpbuf);
+	{
+		/* client_lcd is freed inside lcdnode_remove(), so capture the
+		 * masterlist pointer for the post-removal client-list log
+		 * before that happens. */
+		g15daemon_t *masterlist = client_lcd->masterlist;
+		pthread_mutex_lock(&lcdlist_mutex);
+		if(masterlist->remote_keyhandler_sock==client_sock)
+			masterlist->remote_keyhandler_sock=0;
+		pthread_mutex_unlock(&lcdlist_mutex);
+		g15daemon_lcdnode_remove(display);
+		/* only now - key events are sent to lcd->connection under
+		 * lcdlist_mutex, and a closed fd number can be reused by the
+		 * next client or another plugin's socket */
+		close(client_sock);
+		log_client_list(masterlist);
+	}
 		pthread_mutex_lock(&clients_mutex);
 		client_threads--;
 		pthread_cond_broadcast(&clients_cond);
@@ -501,7 +506,9 @@ static int server_events(plugin_event_t *event) {
 	switch (event->event){
 		case G15_EVENT_KEYPRESS:{
 			if(lcd->connection && lcd->masterlist->remote_keyhandler_sock!=lcd->connection) { /* server client */
-				if((send(lcd->connection,(void *)&event->value,sizeof(event->value),0))<0)
+				/* MSG_DONTWAIT: called with lcdlist_mutex held - a client
+				 * not reading its keys must not stall the daemon */
+				if((send(lcd->connection,(void *)&event->value,sizeof(event->value),MSG_DONTWAIT))<0)
 					g15daemon_log(LOG_WARNING,"Error in send: %s\n",strerror(errno));
 			}
 			break;

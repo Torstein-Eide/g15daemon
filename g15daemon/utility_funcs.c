@@ -46,7 +46,6 @@ extern unsigned int g15daemon_debug;
 extern volatile int leaving;
 #define G15DAEMON_PIDFILE "/var/run/g15daemon.pid"
 
-pthread_cond_t lcd_refresh = PTHREAD_COND_INITIALIZER;
 
 /* if no exitfunc or eventhandler, member should be NULL */
 const plugin_info_t generic_info[] = {
@@ -68,21 +67,34 @@ void *g15daemon_xmalloc(size_t size) {
 	return ptr;
 }
 
+/* LCD redraw requests from clients to the draw thread. refresh_pending is
+ * a flag, not a count: several updates between two draws are coalesced
+ * into one draw of the latest buffer. Used to be an unlocked int with a
+ * throwaway local mutex on the condvar, which raced and lost wakeups. */
+static pthread_mutex_t refresh_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t lcd_refresh;
 static int refresh_pending=0;
+
 void g15daemon_init_refresh() {
-	/* NULL -> default attributes (CLOCK_REALTIME), matching the time()-based
-	 * absolute timeout g15daemon_wait_refresh() builds below. Previously
-	 * passed an uninitialized local pthread_condattr_t here, which is
-	 * undefined behavior and could select an inconsistent/wrong clock,
-	 * making pthread_cond_timedwait()'s 1-second retry loop fire at
-	 * unpredictable intervals instead. */
-	pthread_cond_init(&lcd_refresh, NULL);
+	/* monotonic, so the 1s timeout in g15daemon_wait_refresh() isn't
+	 * thrown off by wall-clock changes */
+	pthread_condattr_t attr;
+	pthread_condattr_init(&attr);
+	pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
+	pthread_cond_init(&lcd_refresh, &attr);
+	pthread_condattr_destroy(&attr);
 }
 
 void g15daemon_send_refresh(lcd_t *lcd) {
-	if(lcd==lcd->masterlist->current->lcd||lcd->state_changed) {
-		pthread_cond_broadcast(&lcd_refresh);
-		refresh_pending++;
+	int wanted;
+	pthread_mutex_lock(&lcdlist_mutex);	/* recursive - callers may hold it */
+	wanted = (lcd==lcd->masterlist->current->lcd||lcd->state_changed);
+	pthread_mutex_unlock(&lcdlist_mutex);
+	if(wanted) {
+		pthread_mutex_lock(&refresh_mutex);
+		refresh_pending = 1;
+		pthread_cond_signal(&lcd_refresh);
+		pthread_mutex_unlock(&refresh_mutex);
 	}
 }
 
@@ -90,23 +102,19 @@ void g15daemon_send_refresh(lcd_t *lcd) {
  * when leaving) - the draw thread uses the timeout as its clock for the
  * watchdog and status updates */
 int g15daemon_wait_refresh() {
-	pthread_mutex_t dummy_mutex;
 	struct timespec timeout;
-	if(refresh_pending<1) {
-		/* Create a dummy mutex which doesn't unlock for sure while waiting. */
-		pthread_mutex_init(&dummy_mutex, NULL);
-		pthread_mutex_lock(&dummy_mutex);
-		time(&timeout.tv_sec);
-		timeout.tv_sec += 1;
-		timeout.tv_nsec = 0L;
-		pthread_cond_timedwait(&lcd_refresh, &dummy_mutex, &timeout);
-		pthread_mutex_unlock(&dummy_mutex);
-		pthread_mutex_destroy(&dummy_mutex);
-		if(refresh_pending<1)
-			return 0;
+	int got;
+	clock_gettime(CLOCK_MONOTONIC, &timeout);
+	timeout.tv_sec += 1;
+	pthread_mutex_lock(&refresh_mutex);
+	while(!refresh_pending && !leaving) {
+		if(pthread_cond_timedwait(&lcd_refresh, &refresh_mutex, &timeout) == ETIMEDOUT)
+			break;
 	}
-	refresh_pending--;
-	return 1;
+	got = refresh_pending;
+	refresh_pending = 0;
+	pthread_mutex_unlock(&refresh_mutex);
+	return got;
 }
 
 void g15daemon_quit_refresh() {
