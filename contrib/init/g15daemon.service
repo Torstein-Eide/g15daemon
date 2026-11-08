@@ -30,10 +30,9 @@ WatchdogSec=30
 # CAP_SETUID/CAP_SETGID must stay in the bounding set too - g15daemon
 # starts as root and calls seteuid()/setegid() to drop to "nobody" once
 # it's opened the hardware fds (main.c). Restricting the bounding set to
-# just CAP_SYS_PTRACE breaks that seteuid()/setegid() call (its return
-# value isn't checked), leaving the daemon stuck running as root instead
-# of dropping privileges - confirmed live via /proc/<pid>/status Uid: line
-# still reading "0 0 0 0" after startup with the narrower set.
+# just CAP_SYS_PTRACE breaks that seteuid()/setegid() call. That used to
+# leave the daemon running as root (confirmed live via /proc/<pid>/status
+# Uid: "0 0 0 0"); main() now logs the failure and exits instead.
 AmbientCapabilities=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
 CapabilityBoundingSet=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH CAP_SETUID CAP_SETGID
 
