@@ -92,7 +92,8 @@ g15daemon_log(LOG_INFO,"PRELOADING %s",name);
 	dlerror();
 
 	handle = dlopen (name,RTLD_LAZY | mode | RTLD_NODELETE);
-	dlclose(handle);
+	if(handle)	/* dlclose(NULL) crashes glibc on a broken .so */
+		dlclose(handle);
 	dlerror();
 
 	handle = dlopen (name,RTLD_NOW | mode | RTLD_NOLOAD);
