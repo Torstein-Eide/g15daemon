@@ -15316,7 +15316,6 @@ printf "%s\n" "#define BUILD_DATE \"${G15D_BUILD_DATE}\"" >>confdefs.h
 printf "%s\n" "#define COMPILER_VERSION \"${G15D_BUILD_CC}\"" >>confdefs.h
 
 
-CPPFLAGS=$CPPFLAGS_save
 CPPFLAGS="$CPPFLAGS "'-DDATADIR="\"$(datadir)\""'
 
 G15DAEMON_PLUGIN_DIR="$libdir/g15daemon/$PACKAGE_VERSION/plugins"

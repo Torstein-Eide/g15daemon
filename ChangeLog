@@ -202,3 +202,4 @@
 * BugFix: Key events are sent to clients whole or not at all (a partial non-blocking write could misalign every later key), and a client that doesn't read its keys no longer logs a warning per key press
 * BugFix: With the Clock plugin disabled or missing, cycling to the empty default screen no longer crashes the daemon, and G-keys still work while it is in front
 * BugFix: Switching screens (cycle key or a priority request) applies the new screen's own contrast and M-key LEDs
+* BugFix: configure no longer discards CPPFLAGS passed to it (e.g. dpkg-buildflags' -D_FORTIFY_SOURCE, or -I for a libg15 elsewhere)
