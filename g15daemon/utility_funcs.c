@@ -543,17 +543,6 @@ config_section_t *g15daemon_cfg_load_section(g15daemon_t *masterlist,char *name)
 	return new;
 }
 
-/* cleanup whitespace */
-char * uf_remove_whitespace(char *str){
-	int z=0;
-	if(str==NULL)
-		str=strdup(" ");
-	while(isspace(str[z])&&str[z])
-		z++;
-	str+=z;
-		return str;
-}
-
 /* add a new key, or update the value of an already existing key, or return -1 if section doesnt exist */
 int g15daemon_cfg_write_string(config_section_t *section, char *key, char *val){
 	config_items_t *new = NULL;
@@ -692,61 +681,76 @@ char* g15daemon_cfg_read_string(config_section_t *section, char *key, char *defa
 	return defaultval;
 }
 
+/* strip leading and trailing whitespace in place, returning the new start */
+static char *uf_trim(char *str) {
+	size_t len;
+	while(isspace((unsigned char)*str))
+		str++;
+	len = strlen(str);
+	while(len && isspace((unsigned char)str[len-1]))
+		str[--len] = '\0';
+	return str;
+}
+
 int uf_conf_open(g15daemon_t *list, char *filename) {
 	char *buffer, *lines;
 	int config_fd=-1;
-	char *sect;
 	char *start;
 	char *bar = NULL;
-	int i;
+	ssize_t got;
 	struct stat stats;
+	config_section_t *section=NULL;
 	list->config=g15daemon_xmalloc(sizeof(configfile_t));
 	list->config->sections=NULL;
-	if (lstat(filename, &stats) == -1)
+	/* open() then fstat() - lstat() on a symlinked conf (NixOS, dotfile
+	 * managers) returned the link's length, so only that many bytes of
+	 * the file were parsed and the rest lost on the next write */
+	if ((config_fd = open(filename, O_RDONLY)) < 0)
 		return -1;
-	if (!(config_fd = open(filename, O_RDWR)))
-		return -1;
-	buffer = g15daemon_xmalloc(stats.st_size + 1);
-	if (read(config_fd, buffer, stats.st_size) != stats.st_size) {
-		free(buffer);
+	if (fstat(config_fd, &stats) == -1) {
 		close(config_fd);
 		return -1;
 	}
+	buffer = g15daemon_xmalloc(stats.st_size + 1);
+	got = read(config_fd, buffer, stats.st_size);
 	close(config_fd);
-	buffer[stats.st_size] = '\0';
+	if (got < 0) {
+		free(buffer);
+		return -1;
+	}
+	buffer[got] = '\0';
 	lines=strtok_r(buffer,"\n",&bar);
-	config_section_t *section=NULL;
 	while(lines!=NULL){
-		sect=strdup(lines);
-		i=0;
-		while(isspace(sect[i])){
-			i++;
-		}
-		start=sect+i;
-		if(start[0]=='#'){
-			/* header - ignore
+		start=uf_trim(lines);
+		if(start[0]=='#' || start[0]=='\0'){
+			/* header/blank - ignore
 			 * comments start with ; and can be produced like so:
 			 * g15daemon_cfg_write_string(noload_cfg,"; Plugins in this section will not be loaded on start","");
 			 * the value parameter must not be used.
 			 */
-		} else if(strrchr(start,']')) { /* section title */
-			char sectiontitle[1024];
-			memset(sectiontitle,0,1024);
-			strncpy(sectiontitle,start+1,strlen(start)-2);
-			section = g15daemon_cfg_load_section(list,sectiontitle);
+		} else if(start[0]=='[' && start[strlen(start)-1]==']') { /* section title */
+			start[strlen(start)-1] = '\0';
+			section = g15daemon_cfg_load_section(list,uf_trim(start+1));
 		}
 		else{
-		/*section keys */
-		if(section==NULL){
-			/* create an internal section "Global" which is the default for items not under a [section] header */
-			section=g15daemon_cfg_load_section(list,"Global");
+			/*section keys */
+			char *sep, *key, *val;
+			if(section==NULL){
+				/* create an internal section "Global" which is the default for items not under a [section] header */
+				section=g15daemon_cfg_load_section(list,"Global");
+			}
+			/* split on the first ':' or '=' only - the value keeps any
+			 * later ones (commands like "env DISPLAY=:0 ...") */
+			sep = start + strcspn(start, ":=");
+			if(*sep) {
+				*sep = '\0';
+				val = uf_trim(sep+1);
+			}
+			else
+				val = "";
+			key = uf_trim(start);
+			g15daemon_cfg_write_string(section,key,val);
 		}
-		char *foo=NULL;
-		char *key = uf_remove_whitespace( strtok_r(start,":=",&foo) );
-		char *val = uf_remove_whitespace( strtok_r(NULL,":=", &foo) );
-		g15daemon_cfg_write_string(section,key,val);
-		}
-		free(sect);
 		lines=strtok_r(NULL,"\n",&bar);
 	}
 	free(buffer);

@@ -173,3 +173,5 @@
 * Change: The logind plugin's idle/wake messages are logged at NOTICE, with the saved/restored LCD level
 * BugFix: The LCD level is read back right before going dark for idle/poweroff, so waking restores a level changed just before
 * Change: The light key (libusb backend only) cycles just the LCD backlight; the keyboard light is left to the hardware/UPower
+3.1.2
+* BugFix: g15daemon.conf values are split on the first ":"/"=" only, so commands like "env DISPLAY=:0 ..." are no longer cut short (and written back cut short at shutdown); "]" inside a value no longer starts a section; a symlinked conf is read in full; a lone "]" line no longer overflows a buffer

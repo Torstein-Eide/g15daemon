@@ -1,3 +1,6 @@
+g15daemon 3.1.2 buster; urgency=low
+ * BugFix: Config values containing ":" or "=" no longer truncated
+
 g15daemon 3.1.1 buster; urgency=low
  * BugFix: Digital clock colon and digit spacing
  * Change: Repeat popup registrations logged at INFO instead of NOTICE
