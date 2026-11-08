@@ -40,6 +40,7 @@
 #include "g15daemon.h"
 #include <libg15.h>
 #include <stdarg.h>
+#include <limits.h>
 #include <libg15render.h>
 
 extern unsigned int g15daemon_debug;
@@ -465,47 +466,85 @@ void uf_conf_free(g15daemon_t *list){
 	free(list->config);
 }
 
-/* write the config file with all keys/sections */
+/* true if the file at path holds exactly len bytes equal to buf */
+static int uf_file_equals(const char *path, const char *buf, size_t len) {
+	struct stat st;
+	char *cur;
+	int fd, same = 0;
+	if((fd = open(path, O_RDONLY)) < 0)
+		return 0;
+	if(fstat(fd, &st) == 0 && (size_t)st.st_size == len) {
+		cur = malloc(len + 1);
+		if(cur && read(fd, cur, len) == (ssize_t)len)
+			same = memcmp(cur, buf, len) == 0;
+		free(cur);
+	}
+	close(fd);
+	return same;
+}
+
+/* write the config file with all keys/sections. Skipped when nothing
+ * changed; otherwise written to a temp file next to the real one (through
+ * a symlink), fsync()ed and renamed over it, so a crash or power cut
+ * during poweroff can't leave it empty or half-written */
 int uf_conf_write(g15daemon_t *list,char *filename){
-	int config_fd=-1;
 	config_section_t *foo=list->config->sections;
 	config_items_t * item=NULL;
-	char line[1024];
-	config_fd = open(filename,O_CREAT|O_RDWR|O_TRUNC, 0644);
-	if(config_fd){
-		size_t len;
-		snprintf(line,1024,"# G15Daemon Configuration File\n# any items entered before a [section] header\n# will be in the Global config space\n# comments you wish to keep should start with a semicolon';'\n");
-		len = strlen(line);
-		if((size_t)write(config_fd,line,len) != len)
-			g15daemon_log(LOG_WARNING, "uf_conf_write(): %s", strerror(errno));
-		while(foo!=NULL){
-			item=foo->items;
-			memset(line,0,1024);
-			if(foo->sectionname!=NULL){
-				snprintf(line,1024,"\n[%s]\n",foo->sectionname);
-				len = strlen(line);
-				if((size_t)write(config_fd,line,len) != len)
-					g15daemon_log(LOG_WARNING, "uf_conf_write(): %s", strerror(errno));
-				while(item!=NULL){
-					memset(line,0,1024);
-					if(item->key!=NULL){
-						if(item->key[0]==';') // comment
-						snprintf(line,1024,"%s\n",item->key);
-					else
-						snprintf(line,1024,"%s: %s\n",item->key, item->value);
-					len = strlen(line);
-					if((size_t)write(config_fd,line,len) != len)
-						g15daemon_log(LOG_WARNING, "uf_conf_write(): %s", strerror(errno));
-					}
-					item=item->next;
-				}
+	char *buf = NULL;
+	size_t len = 0;
+	char target[PATH_MAX];
+	char tmpname[PATH_MAX + 16];
+	FILE *out;
+	int fd, ok;
+
+	if((out = open_memstream(&buf, &len)) == NULL)
+		return -1;
+	fprintf(out,"# G15Daemon Configuration File\n# any items entered before a [section] header\n# will be in the Global config space\n# comments you wish to keep should start with a semicolon';'\n");
+	while(foo!=NULL){
+		if(foo->sectionname!=NULL){
+			fprintf(out,"\n[%s]\n",foo->sectionname);
+			for(item=foo->items; item!=NULL; item=item->next){
+				if(item->key==NULL)
+					continue;
+				if(item->key[0]==';') // comment
+					fprintf(out,"%s\n",item->key);
+				else
+					fprintf(out,"%s: %s\n",item->key, item->value);
 			}
-		foo=foo->next;
 		}
-		close(config_fd);
+		foo=foo->next;
+	}
+	if(fclose(out) != 0) {
+		free(buf);
+		return -1;
+	}
+
+	/* write next to the real file if the path is a symlink */
+	if(realpath(filename, target) == NULL)
+		snprintf(target, sizeof(target), "%s", filename);
+	if(uf_file_equals(target, buf, len)) {
+		free(buf);
 		return 0;
 	}
-	return -1;
+	snprintf(tmpname, sizeof(tmpname), "%s.XXXXXX", target);
+	if((fd = mkstemp(tmpname)) < 0) {
+		g15daemon_log(LOG_WARNING, "uf_conf_write(): %s: %s", tmpname, strerror(errno));
+		free(buf);
+		return -1;
+	}
+	ok = fchmod(fd, 0644) == 0 &&
+	     write(fd, buf, len) == (ssize_t)len &&
+	     fsync(fd) == 0;
+	if(close(fd) != 0)
+		ok = 0;
+	if(ok && rename(tmpname, target) != 0)
+		ok = 0;
+	if(!ok) {
+		g15daemon_log(LOG_WARNING, "uf_conf_write(): %s: %s", target, strerror(errno));
+		unlink(tmpname);
+	}
+	free(buf);
+	return ok ? 0 : -1;
 }
 
 /* search the list for valid section name return pointer to section, or NULL otherwise */

@@ -181,3 +181,4 @@
 * BugFix: Thread-safety: key presses are dispatched with the client list locked (a disconnecting popup could free the screen being sent a key), redraw requests use a proper mutex and are coalesced, and a client socket is closed only after its screen is removed (keys could go to a reused fd)
 * Change: At most 10 TCP clients (MAX_CLIENTS) are accepted at once; further connections are closed and logged. It was only the listen backlog before, so any local process could open unlimited screens
 * BugFix: /dev/uinput is opened before the privilege drop; the uinput plugin no longer switches the whole process back to root at runtime (other threads ran as root meanwhile, and the daemon stayed root if uinput could not be opened)
+* BugFix: g15daemon.conf is only rewritten at shutdown when something changed, and then via a temp file, fsync and rename (a symlinked conf stays a symlink), so a power cut during poweroff can no longer leave it empty; write errors are now detected
