@@ -348,13 +348,16 @@ static void *lcd_client_thread(void *display) {
 			pthread_mutex_unlock(&lcdlist_mutex);
 		}
 	}
-	else if (tmpbuf[0]=='W'){ /* wbmp buffer - we assume (stupidly) that it's 160 pixels wide */
+	else if (tmpbuf[0]=='W'){ /* wbmp buffer - only 160 pixels wide is supported */
 		while(!leaving) {
+			unsigned int extra;
 			retval = g15_recv(g15node, client_sock,(char*)tmpbuf, 865);
-			if(!retval)
+			if(retval != 865)
 				break;
-			if (tmpbuf[2] & 1) {
-				width = ((unsigned char)tmpbuf[2] ^ 1) | (unsigned char)tmpbuf[3];
+			/* WBMP: type, fixheader, then width and height as
+			 * multi-byte integers (7 bits per byte, high bit = more) */
+			if (tmpbuf[2] & 0x80) {
+				width = ((tmpbuf[2] & 0x7f) << 7) | tmpbuf[3];
 				height = tmpbuf[4];
 				header = 5;
 			}
@@ -363,18 +366,24 @@ static void *lcd_client_thread(void *display) {
 				height = tmpbuf[3];
 				header = 4;
 			}
-			buflen = (width/8)*height;
-			if(buflen>860){ /* grab the remainder of the image and discard excess bytes */
-				//  retval=g15_recv(client_sock,(char*)tmpbuf+865,buflen-860);
-				retval=g15_recv(g15node, client_sock,NULL,buflen-860);
-				buflen = 860;
-			}
-
 			if(width!=160) /* FIXME - we ought to scale images I suppose */
 				goto exitthread;
+			buflen = (width/8)*height;
+			if(buflen + header > 865) {
+				/* read and drop the rest of a taller image, so the next
+				 * frame starts in the right place (this used to recv()
+				 * into NULL, which failed and left the stream out of
+				 * step) */
+				extra = buflen + header - 865;
+				if(g15_recv(g15node, client_sock, (char*)tmpbuf + 865, extra) != (int)extra)
+					break;
+				buflen = 865 - header;
+			}
+			if(buflen > sizeof(client_lcd->buf))
+				buflen = sizeof(client_lcd->buf);
 
 			pthread_mutex_lock(&lcdlist_mutex);
-			memcpy(client_lcd->buf,tmpbuf+header,buflen+header);
+			memcpy(client_lcd->buf,tmpbuf+header,buflen);
 			g15daemon_send_refresh(client_lcd);
 			pthread_mutex_unlock(&lcdlist_mutex);
 		}
