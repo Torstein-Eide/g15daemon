@@ -185,3 +185,4 @@
 * BugFix: The foreground screen's M-key LEDs no longer overwrite those set by a client key handler (macro recorder)
 * BugFix: M1-M3 key LED writes are serialized with the other LCD/LED writes
 * BugFix: libg15daemon_client: a command answer that doesn't arrive returns -1 as documented (IS_FOREGROUND returned -48, i.e. true, so popups thought they were in front); the wait is 1s instead of 100ms
+* BugFix: A failed accept() no longer registers a phantom client with fd -1

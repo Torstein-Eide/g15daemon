@@ -425,18 +425,17 @@ static int g15_clientconnect (g15daemon_t **g15daemon, int listening_socket) {
 			return 0;
 		}
 	if ( (conn_s = accept(listening_socket, NULL, NULL) ) < 0 ) {
-		if(errno==EWOULDBLOCK || errno==EAGAIN){
-		}
-		else{
-		g15daemon_log(LOG_WARNING, "error calling accept()\n");
-			return -1;
-		}
+		/* EAGAIN: the connection went away between poll() and accept() -
+		 * this used to carry on with conn_s = -1 and register a screen */
+		if(errno!=EWOULDBLOCK && errno!=EAGAIN && errno!=EINTR && errno!=ECONNABORTED)
+			g15daemon_log(LOG_WARNING, "error calling accept(): %s", strerror(errno));
+		return 0;
 	}
 
 	/* MAX_CLIENTS used to be only the listen() backlog - any local
 	 * process could open unlimited screens, each with its own thread */
 	pthread_mutex_lock(&clients_mutex);
-	if(conn_s >= 0 && client_threads >= MAX_CLIENTS) {
+	if(client_threads >= MAX_CLIENTS) {
 		pthread_mutex_unlock(&clients_mutex);
 		g15daemon_log(LOG_WARNING, "Rejecting client: already %d connected (max %d)", MAX_CLIENTS, MAX_CLIENTS);
 		close(conn_s);
