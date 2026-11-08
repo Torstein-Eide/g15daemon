@@ -196,3 +196,4 @@
 * BugFix: Idle Command/Active Command no longer keep root's supplementary groups
 * BugFix: The plugin load order is rebuilt when a plugin it names no longer exists, not only when the number of plugins changes
 * BugFix: A broken or incompatible plugin .so is skipped with an error instead of crashing the daemon
+* BugFix: L1 tap-vs-hold timing uses a monotonic clock, so a clock change can't turn a tap into a hold

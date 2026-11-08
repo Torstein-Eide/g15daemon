@@ -319,10 +319,12 @@ int g15daemon_usleep(int useconds) {
 int g15daemon_msleep(int milliseconds) {
 	return g15daemon_usleep(milliseconds*1000);
 }
+/* monotonic: only used for intervals (the L1 tap-vs-hold timing), which a
+ * wall-clock change used to throw off */
 unsigned int g15daemon_gettime_ms(){
-	struct timeval tv;
-	gettimeofday(&tv,NULL);
-	return (tv.tv_sec*1000+tv.tv_usec/1000);
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (unsigned int)(ts.tv_sec*1000 + ts.tv_nsec/1000000);
 }
 
 /* generic event handler used unless overridden (only loading a plugin will override currently)*/
