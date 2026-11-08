@@ -318,7 +318,12 @@ static void *keyboard_watch_thread(void *lcdlist){
 				g15daemon_reapply_backlight(masterlist);
 			}
 		}
-	g15daemon_msleep(40);
+		/* only back off on errors: after a key batch libg15 reports just
+		 * the final state of everything queued, so sleeping here made a
+		 * tap shorter than the sleep (press and release in one batch)
+		 * vanish. The read itself blocks in poll(). */
+		if(retval != G15_NO_ERROR)
+			g15daemon_msleep(40);
 	}
 	return NULL;
 }

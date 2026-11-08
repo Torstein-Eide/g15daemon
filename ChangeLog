@@ -205,3 +205,4 @@
 * BugFix: configure no longer discards CPPFLAGS passed to it (e.g. dpkg-buildflags' -D_FORTIFY_SOURCE, or -I for a libg15 elsewhere)
 * BugFix: make install installs g15logo2.wbmp, the splash image g15daemon actually shows at startup (only g15logo3.wbmp was installed, so a clean install started with a blank screen)
 * BugFix: g15daemon_cfg_remove_key() (plugin API) no longer double-frees a section's only key or loses keys appended after removing one from the middle
+* BugFix: Quick taps of G/M/L keys are no longer lost (the keyboard thread slept 40ms after every key event)

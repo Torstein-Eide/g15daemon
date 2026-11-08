@@ -11,6 +11,7 @@ g15daemon 3.1.2 buster; urgency=low
  * Stale pidfile no longer blocks startup
  * No crash cycling screens with the Clock plugin disabled
  * configure keeps the CPPFLAGS passed to it
+ * Quick key taps no longer lost
 
 g15daemon 3.1.1 buster; urgency=low
  * BugFix: Digital clock colon and digit spacing
