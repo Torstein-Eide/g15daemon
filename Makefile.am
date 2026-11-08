@@ -12,7 +12,7 @@ man1_MANS = $(top_srcdir)/Documentation/g15daemon.1
 man3_MANS = $(top_srcdir)/Documentation/g15daemon_client_devel.3
 
 imagedir = $(prefix)/share/g15daemon/splash
-image_DATA = images/g15logo3.wbmp
+image_DATA = images/g15logo2.wbmp images/g15logo3.wbmp
 
 install-data-hook:
 if KEXT_INSTALL
