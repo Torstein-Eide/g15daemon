@@ -29,7 +29,9 @@
 #include <g15daemon.h>
 #include <libg15.h>
 
-extern plugin_info_t *generic_info;
+/* utility_funcs.c - an array, not a pointer: declaring it as a pointer
+ * only worked because the code took its address */
+extern const plugin_info_t generic_info[];
 extern unsigned int cycle_key;
 
 /* definition (storage) for the process-wide mutex declared extern in
@@ -46,7 +48,7 @@ lcd_t static * ll_create_lcd () {
 	lcd->usr_foreground = 0;
 	lcd->g15plugin = g15daemon_xmalloc(sizeof (plugin_s));
 	lcd->g15plugin->plugin_handle = NULL;
-	lcd->g15plugin->info = (void*)&generic_info;
+	lcd->g15plugin->info = (plugin_info_t*)generic_info;
 	return (lcd);
 }
 
@@ -93,9 +95,9 @@ g15daemon_t *ll_lcdlist_init () {
 const char *g15daemon_screen_name(lcd_t *lcd) {
 	if(lcd->client_name[0])
 		return lcd->client_name;
-	/* nodes without a loaded plugin still point info at generic_info's
-	 * address, which isn't a plugin_info_t - only trust info once a
-	 * plugin has been memcpy'd in (g15_plugins.c) */
+	/* nodes without a loaded plugin point info at generic_info
+	 * ("BackwardCompatible") - only use the name once a plugin has been
+	 * memcpy'd in (g15_plugins.c) */
 	if(lcd->g15plugin->plugin_handle && lcd->g15plugin->info && lcd->g15plugin->info->name)
 		return lcd->g15plugin->info->name;
 	return "clock";

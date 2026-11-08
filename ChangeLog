@@ -190,3 +190,4 @@
 * BugFix: WBMP ('W') client buffers: images taller than the LCD no longer put the stream out of step, the width is decoded as a WBMP multi-byte integer, and short reads end the connection
 * BugFix: The cycle key no longer hangs the daemon when every screen is marked never-select
 * Change: Removed the unused keyhandler/client_handles_keys code
+* Change: generic_info is declared with its real type
