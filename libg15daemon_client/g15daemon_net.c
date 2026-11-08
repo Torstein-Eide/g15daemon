@@ -194,24 +194,30 @@ int g15_recv(int sock, char *buf, unsigned int len){
 	return total;
 }
 
-/* receive a byte from a priority, out-of-band packet */
+/* receive a byte from a priority, out-of-band packet - -1 if none came
+ * (it used to return 0 after the timeout, which IS_FOREGROUND turned into
+ * -48: "true", so a popup believed it was in front and never asked for
+ * the foreground) */
 int g15_recv_oob_answer(int sock) {
-	int packet[2];
+	unsigned char packet[2];
 	int msgret = 0;
 	struct pollfd pfd[1];
 	memset(pfd,0,sizeof(pfd));
 	memset(packet,0,sizeof(packet));
 	pfd[0].fd = sock;
 	pfd[0].events = POLLPRI | POLLERR | POLLHUP | POLLNVAL;
-	if(poll(pfd,1,100)>0){
+	/* the daemon answers from the client's thread, which may briefly wait
+	 * for the LCD - 100ms was too tight */
+	if(poll(pfd,1,1000)>0){
 		if(pfd[0].revents & POLLPRI && !(pfd[0].revents & POLLERR || pfd[0].revents & POLLHUP || pfd[0].revents & POLLNVAL)) {
 			msgret = recv(sock, packet, sizeof(packet) , MSG_OOB);
 			if (msgret < 1) {
 				return -1;
 			}
+			return packet[0];
 		}
 	}
-	return packet[0];
+	return -1;
 }
 
 unsigned long g15_send_cmd (int sock, unsigned char command, unsigned char value){
@@ -266,7 +272,9 @@ unsigned long g15_send_cmd (int sock, unsigned char command, unsigned char value
 		case G15DAEMON_IS_FOREGROUND:{
 			packet[0] = (unsigned char)command;
 			send( sock, packet, 1, MSG_OOB );
-			retval = g15_recv_oob_answer(sock) - 48;
+			retval = g15_recv_oob_answer(sock);
+			if(retval >= 0)
+				retval -= '0';
 			break;
 		}
 		case G15DAEMON_IS_USER_SELECTED:{

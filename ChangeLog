@@ -184,3 +184,4 @@
 * BugFix: g15daemon.conf is only rewritten at shutdown when something changed, and then via a temp file, fsync and rename (a symlinked conf stays a symlink), so a power cut during poweroff can no longer leave it empty; write errors are now detected
 * BugFix: The foreground screen's M-key LEDs no longer overwrite those set by a client key handler (macro recorder)
 * BugFix: M1-M3 key LED writes are serialized with the other LCD/LED writes
+* BugFix: libg15daemon_client: a command answer that doesn't arrive returns -1 as documented (IS_FOREGROUND returned -48, i.e. true, so popups thought they were in front); the wait is 1s instead of 100ms
