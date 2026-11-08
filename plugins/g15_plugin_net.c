@@ -469,12 +469,14 @@ static int g15_clientconnect (g15daemon_t **g15daemon, int listening_socket) {
 		client_threads--;
 		pthread_mutex_unlock(&clients_mutex);
 		g15daemon_log(LOG_ERR,"Unable to create client thread.");
-		if (close(conn_s) < 0 ) {
-			g15daemon_log(LOG_WARNING, "error calling close()\n");
-			return -1;
-		}
-		}
-		pthread_detach(client_connection);
+		/* the screen was already added (and may be in front) - without
+		 * its thread nothing would ever remove it */
+		g15daemon_lcdnode_remove(clientnode);
+		close(conn_s);
+		pthread_attr_destroy(&attr);
+		return -1;
+	}
+	pthread_attr_destroy(&attr);
 	}
 	return 0;
 }
