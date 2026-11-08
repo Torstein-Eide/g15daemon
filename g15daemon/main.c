@@ -401,18 +401,6 @@ static void *lcd_draw_thread(void *lcdlist){
 	return NULL;
 }
 
-void g15daemon_sighandler(int sig) {
-	switch(sig){
-		case SIGUSR1:
-			keyboard_backlight_off_onexit = 1;
-		case SIGINT:
-		case SIGTERM:
-		case SIGQUIT:
-			leaving = 1;
-			break;
-	}
-}
-
 #ifndef HAVE_DAEMON
 /* daemon() is not posix compliant, so we roll our own if needed.*/
 int daemon(int nochdir, int noclose) {
@@ -450,7 +438,7 @@ int main (int argc, char *argv[]) {
 	int retval;
 	int i;
 	int cycle_cmdline_override=0;
-	struct sigaction new_action;
+	sigset_t exit_signals;
 	cycle_key = G15_KEY_L1;
 	unsigned char user[256];
 	int lcdlevel = -1;	/* -l: -1 = not given */
@@ -576,6 +564,17 @@ int main (int argc, char *argv[]) {
 		g15daemon_log(LOG_ERR,"Unable to daemonize: %s",strerror(errno));
 		exit(1);
 	}
+	/* the exit signals are blocked here, before any thread exists (they
+	 * all inherit the mask), and taken with sigwait() in main() below:
+	 * handlers used to be installed only after the plugins had loaded,
+	 * so a SIGTERM during startup killed the daemon without cleanup, and
+	 * pause() only returned if the signal happened to hit main's thread */
+	sigemptyset(&exit_signals);
+	sigaddset(&exit_signals, SIGINT);
+	sigaddset(&exit_signals, SIGQUIT);
+	sigaddset(&exit_signals, SIGTERM);
+	sigaddset(&exit_signals, SIGUSR1);
+	pthread_sigmask(SIG_BLOCK, &exit_signals, NULL);
 	if(uf_create_pidfile() == 0) {
 		g15daemon_t *lcdlist;
 		config_section_t *global_cfg=NULL;
@@ -662,16 +661,15 @@ int main (int argc, char *argv[]) {
 			g15daemon_log(LOG_INFO,"Plugin load took %.2f ms\n", g15_timer_ms(&phase));
 		}
 		g15u_sd_notify_ready("g15daemon %s | starting", PACKAGE_VERSION);
-		new_action.sa_handler = g15daemon_sighandler;
-		new_action.sa_flags = 0;
-		sigaction(SIGINT, &new_action, NULL);
-		sigaction(SIGQUIT, &new_action, NULL);
-		sigaction(SIGTERM, &new_action, NULL);
-		sigaction(SIGUSR1, &new_action, NULL);
-		do {
-			pause();
+		{
+			int sig = 0;
+			while(sigwait(&exit_signals, &sig) != 0)
+				;
+			/* SIGUSR1 (-K): also switch both backlights off */
+			if(sig == SIGUSR1)
+				keyboard_backlight_off_onexit = 1;
+			leaving = 1;
 		}
-		while( leaving == 0);
 		g15daemon_log(LOG_NOTICE,"Leaving by request");
 		g15u_sd_notify_stopping();
 

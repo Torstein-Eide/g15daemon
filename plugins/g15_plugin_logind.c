@@ -374,8 +374,13 @@ static void run_command(const char *cmd) {
 					close(fd);
 			}
 #endif
-			/* g15daemon ignores SIGPIPE; the command shouldn't inherit that */
+			/* g15daemon ignores SIGPIPE and blocks its exit signals
+			 * (main() takes them with sigwait()); the command shouldn't
+			 * inherit either */
+			sigset_t none;
 			signal(SIGPIPE, SIG_DFL);
+			sigemptyset(&none);
+			sigprocmask(SIG_SETMASK, &none, NULL);
 			execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
 			_exit(127);
 		}
