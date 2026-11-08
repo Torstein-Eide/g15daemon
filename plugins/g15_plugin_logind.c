@@ -55,6 +55,7 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <grp.h>
 #include <config.h>
 #include <g15daemon.h>
 #include <libg15.h>
@@ -363,7 +364,12 @@ static void run_command(const char *cmd) {
 		if(grandchild == 0) {
 			gid_t gid = getegid();
 			uid_t uid = geteuid();
-			if(setresgid(gid, gid, gid) != 0 || setresuid(uid, uid, uid) != 0)
+			/* setgroups() too: the daemon was started by root and may
+			 * still carry root's supplementary groups (e.g. 0). That
+			 * needs CAP_SETGID, so first back to euid 0 - only in this
+			 * single-threaded child, not the daemon */
+			if(seteuid(0) != 0 || setgroups(0, NULL) != 0 ||
+			   setresgid(gid, gid, gid) != 0 || setresuid(uid, uid, uid) != 0)
 				_exit(126);
 #ifdef HAVE_CLOSE_RANGE
 			close_range(3, ~0U, 0);
