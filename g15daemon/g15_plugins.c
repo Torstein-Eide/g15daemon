@@ -327,6 +327,25 @@ int g15_plugin_load (g15daemon_t *masterlist, char *filename) {
 }
 
 
+/* whether every plugin named in [PLUGIN_LOAD_ORDER] 0..count-1 still
+ * exists - the count alone missed one plugin replaced by another */
+static int load_order_valid(config_section_t *load_cfg, char *plugin_directory, int count) {
+	int i;
+	for(i=0;i<count;i++){
+		char tmp[16];
+		char fname[1024];
+		config_items_t *item;
+		snprintf(tmp,sizeof(tmp),"%i",i);
+		item = uf_search_confitem(load_cfg,tmp);
+		if(item == NULL || item->value[0] == '\0' || item->value[0] == '/')
+			return 0;
+		snprintf(fname,sizeof(fname),"%s/%s",plugin_directory,item->value);
+		if(access(fname, R_OK) != 0)
+			return 0;
+	}
+	return 1;
+}
+
 int g15_open_all_plugins(g15daemon_t *masterlist, char *plugin_directory) {
 	DIR *directory;
 	struct dirent *ep;
@@ -337,7 +356,7 @@ int g15_open_all_plugins(g15daemon_t *masterlist, char *plugin_directory) {
 
 	if(!uf_search_confitem(load_cfg,"TotalPlugins") ||
 		(g15daemon_cfg_read_int(load_cfg,"TotalPlugins",0)!=count) ||
-		(g15daemon_cfg_read_string(load_cfg,"0","")[0]=='/')) {
+		!load_order_valid(load_cfg, plugin_directory, count)) {
 		g15daemon_log(LOG_INFO,"Number of plugins has changed. Rebuilding load order.");
 		directory = opendir (plugin_directory);
 		if (directory != NULL && count){
@@ -369,7 +388,7 @@ int g15_open_all_plugins(g15daemon_t *masterlist, char *plugin_directory) {
 			char tmp[16];
 			char plugin_fname[1024];
 			snprintf(tmp,sizeof(tmp),"%i",i);
-			snprintf(plugin_fname,sizeof(plugin_fname),"%s/%s",PLUGINDIR,g15daemon_cfg_read_string(load_cfg,tmp,""));
+			snprintf(plugin_fname,sizeof(plugin_fname),"%s/%s",plugin_directory,g15daemon_cfg_read_string(load_cfg,tmp,""));
 			g15_plugin_load(masterlist,plugin_fname);
 			g15daemon_msleep(20);
 		}
