@@ -206,3 +206,4 @@
 * BugFix: make install installs g15logo2.wbmp, the splash image g15daemon actually shows at startup (only g15logo3.wbmp was installed, so a clean install started with a blank screen)
 * BugFix: g15daemon_cfg_remove_key() (plugin API) no longer double-frees a section's only key or loses keys appended after removing one from the middle
 * BugFix: Quick taps of G/M/L keys are no longer lost (the keyboard thread slept 40ms after every key event)
+* Change: The LCD thread copies the frame under the client-list lock and writes it to the hardware after releasing it, so key presses and client updates no longer wait out an LCD write or the backlight read

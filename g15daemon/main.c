@@ -353,6 +353,12 @@ static void *lcd_draw_thread(void *lcdlist){
 	 * (g15daemon_wait_refresh() returns 0 after 1s without a refresh), so
 	 * no extra thread is needed to drive these. */
 	struct g15_timer status_timer, watchdog_timer;
+	/* what the loop copies out of the shown screen under lcdlist_mutex */
+	static lcd_t frame;
+	unsigned int apply_state = 0, contrast = 0, mkeys = 0;
+	int keyhandler_active = 0;
+	char fg_name[64];
+	unsigned long numclients;
 	g15_timer_start(&status_timer);
 	g15_timer_start(&watchdog_timer);
 	g15daemon_sleep(2);
@@ -368,54 +374,62 @@ static void *lcd_draw_thread(void *lcdlist){
 		}
 		if(device_gone)
 			continue;
+		/* only copy under lcdlist_mutex - the hardware writes happen after
+		 * unlocking, so key dispatch and client updates don't wait out an
+		 * LCD write or the sysfs backlight read */
 		pthread_mutex_lock(&lcdlist_mutex);
 		displaying = masterlist->current->lcd;
 		if(refreshed) {
-			g15daemon_log(LOG_DEBUG,"Updating LCD");
-			{
-				struct g15_timer draw_timer;
-				g15_timer_start(&draw_timer);
-				uf_write_buf_to_g15(displaying);
-				masterlist->last_draw_ms = g15_timer_ms(&draw_timer);
-				if(masterlist->min_draw_ms == 0 || masterlist->last_draw_ms < masterlist->min_draw_ms)
-					masterlist->min_draw_ms = masterlist->last_draw_ms;
-				if(masterlist->last_draw_ms > masterlist->max_draw_ms)
-					masterlist->max_draw_ms = masterlist->last_draw_ms;
-				g15daemon_log(LOG_DEBUG,"LCD draw took %.2f ms", masterlist->last_draw_ms);
-			}
+			memcpy(frame.buf, displaying->buf, sizeof(frame.buf));
+			apply_state = displaying->state_changed;
+			contrast = displaying->contrast_state;
+			mkeys = displaying->mkey_state;
+			keyhandler_active = masterlist->remote_keyhandler_sock != 0;
+			displaying->state_changed = 0;
+		}
+		snprintf(fg_name, sizeof(fg_name), "%s", g15daemon_screen_name(displaying));
+		numclients = masterlist->numclients;
+		pthread_mutex_unlock(&lcdlist_mutex);
 
-			if(displaying->state_changed){
+		if(refreshed) {
+			struct g15_timer draw_timer;
+			g15daemon_log(LOG_DEBUG,"Updating LCD");
+			g15_timer_start(&draw_timer);
+			uf_write_buf_to_g15(&frame);
+			masterlist->last_draw_ms = g15_timer_ms(&draw_timer);
+			if(masterlist->min_draw_ms == 0 || masterlist->last_draw_ms < masterlist->min_draw_ms)
+				masterlist->min_draw_ms = masterlist->last_draw_ms;
+			if(masterlist->last_draw_ms > masterlist->max_draw_ms)
+				masterlist->max_draw_ms = masterlist->last_draw_ms;
+			g15daemon_log(LOG_DEBUG,"LCD draw took %.2f ms", masterlist->last_draw_ms);
+
+			if(apply_state){
 				pthread_mutex_lock(&g15lib_mutex);
-				setLCDContrast(displaying->contrast_state);
-				if(displaying->masterlist->remote_keyhandler_sock==0) // only allow mled control if the macro recorder isnt running
-					setLEDs(displaying->mkey_state);
+				setLCDContrast(contrast);
+				if(!keyhandler_active) // only allow mled control if the macro recorder isnt running
+					setLEDs(mkeys);
 				pthread_mutex_unlock(&g15lib_mutex);
-				displaying->state_changed = 0;
 			}
 		}
 
 		if(g15_timer_ms(&status_timer) >= 5000.0) {
 			struct timespec now;
 			char uptime_str[32];
-			const char *fg_name;
 
 			g15daemon_sync_backlight(masterlist);
-			fg_name = g15daemon_screen_name(masterlist->current->lcd);
 
 			clock_gettime(CLOCK_MONOTONIC, &now);
 			format_uptime((now.tv_sec - masterlist->start_time.tv_sec) +
 				      (now.tv_nsec - masterlist->start_time.tv_nsec) / 1e9,
 				      uptime_str, sizeof(uptime_str));
 			g15u_sd_notify_status("g15daemon %s | up %s | clients=%lu (%lu connection events since start) | fg=%s | backlight=%u/%u%s | last draw=%.2fms (min %.2f/max %.2f)",
-					       PACKAGE_VERSION, uptime_str, masterlist->numclients,
+					       PACKAGE_VERSION, uptime_str, numclients,
 					       masterlist->total_clients_connected, fg_name,
 					       masterlist->lcd_backlight_state, masterlist->kb_backlight_state,
 					       masterlist->backlight_idle ? " (idle)" : "",
 					       masterlist->last_draw_ms, masterlist->min_draw_ms, masterlist->max_draw_ms);
 			g15_timer_start(&status_timer);
 		}
-
-		pthread_mutex_unlock(&lcdlist_mutex);
 	}
 	return NULL;
 }
