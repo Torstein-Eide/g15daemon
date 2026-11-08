@@ -146,8 +146,17 @@ typedef struct config_items_s {
 	config_items_t *head;
 	char *key;
 	char *value;
+	/* G15_CFG_* - where the value came from, so uf_conf_write() can merge
+	 * only what the daemon itself set into the file as it is on disk */
+	int origin;
 }
 config_items_s;
+
+enum {
+	G15_CFG_FROM_FILE = 0,	/* read from g15daemon.conf */
+	G15_CFG_DEFAULT,	/* default filled in by a g15daemon_cfg_read_*() */
+	G15_CFG_CHANGED		/* set at runtime by g15daemon_cfg_write_*() */
+};
 
 typedef struct config_section_s {
 	config_section_t *head;

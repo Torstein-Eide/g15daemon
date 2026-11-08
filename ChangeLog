@@ -207,3 +207,4 @@
 * BugFix: g15daemon_cfg_remove_key() (plugin API) no longer double-frees a section's only key or loses keys appended after removing one from the middle
 * BugFix: Quick taps of G/M/L keys are no longer lost (the keyboard thread slept 40ms after every key event)
 * Change: The LCD thread copies the frame under the client-list lock and writes it to the hardware after releasing it, so key presses and client updates no longer wait out an LCD write or the backlight read
+* BugFix: Editing g15daemon.conf while the daemon runs and then restarting it no longer loses the edit: at shutdown the file is re-read and only what the daemon itself changed (screen selection, clock modes, plugin load order) and missing defaults are merged into it

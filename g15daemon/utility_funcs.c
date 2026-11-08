@@ -486,7 +486,10 @@ void g15daemon_reapply_backlight(g15daemon_t *masterlist) {
 
 /* free all memory used by the config subsystem */
 void uf_conf_free(g15daemon_t *list){
-	config_section_t *section=list->config->sections;
+	config_section_t *section;
+	if(list->config==NULL)
+		return;
+	section=list->config->sections;
 	config_items_t *tmpitem=NULL;
 	config_section_t *tmpsection=section;
 	while(tmpsection!=NULL){
@@ -509,6 +512,7 @@ void uf_conf_free(g15daemon_t *list){
 	}
 	free(section);
 	free(list->config);
+	list->config=NULL;
 }
 
 /* true if the file at path holds exactly len bytes equal to buf */
@@ -528,12 +532,38 @@ static int uf_file_equals(const char *path, const char *buf, size_t len) {
 	return same;
 }
 
-/* write the config file with all keys/sections. Skipped when nothing
- * changed; otherwise written to a temp file next to the real one (through
+static int uf_cfg_set(config_section_t *section, char *key, char *val, int origin);
+
+/* Merge what the daemon set at runtime (and defaults it filled in) into
+ * `disk`, the file as it is now. Writing the copy loaded at startup back
+ * instead threw away every edit made to the file while the daemon ran -
+ * the usual edit-then-`systemctl restart` lost the edit at the stop. */
+static void uf_conf_merge(configfile_t *mem, g15daemon_t *disk) {
+	config_section_t *sec;
+	config_items_t *item;
+	for(sec = mem->sections; sec != NULL; sec = sec->next) {
+		config_section_t *dsec = NULL;
+		if(sec->sectionname == NULL)
+			continue;
+		for(item = sec->items; item != NULL; item = item->next) {
+			if(item->key == NULL || item->origin == G15_CFG_FROM_FILE)
+				continue;
+			if(dsec == NULL)
+				dsec = g15daemon_cfg_load_section(disk, sec->sectionname);
+			/* runtime changes win; defaults only fill in missing keys */
+			if(item->origin == G15_CFG_CHANGED || uf_search_confitem(dsec, item->key) == NULL)
+				uf_cfg_set(dsec, item->key, item->value, item->origin);
+		}
+	}
+}
+
+/* write the config file: the file as it is on disk now plus what the
+ * daemon changed (see uf_conf_merge()). Skipped when that changes
+ * nothing; otherwise written to a temp file next to the real one (through
  * a symlink), fsync()ed and renamed over it, so a crash or power cut
  * during poweroff can't leave it empty or half-written */
 int uf_conf_write(g15daemon_t *list,char *filename){
-	config_section_t *foo=list->config->sections;
+	config_section_t *foo;
 	config_items_t * item=NULL;
 	char *buf = NULL;
 	size_t len = 0;
@@ -541,9 +571,24 @@ int uf_conf_write(g15daemon_t *list,char *filename){
 	char tmpname[PATH_MAX + 16];
 	FILE *out;
 	int fd, ok;
+	g15daemon_t disk;
 
-	if((out = open_memstream(&buf, &len)) == NULL)
+	/* write next to the real file if the path is a symlink */
+	if(realpath(filename, target) == NULL)
+		snprintf(target, sizeof(target), "%s", filename);
+
+	memset(&disk, 0, sizeof(disk));
+	if(uf_conf_open(&disk, target) == 0) {
+		uf_conf_merge(list->config, &disk);
+		foo = disk.config->sections;
+	}
+	else
+		foo = list->config->sections;	/* no readable file - write ours */
+
+	if((out = open_memstream(&buf, &len)) == NULL) {
+		uf_conf_free(&disk);
 		return -1;
+	}
 	fprintf(out,"# G15Daemon Configuration File\n# any items entered before a [section] header\n# will be in the Global config space\n# comments you wish to keep should start with a semicolon';'\n");
 	while(foo!=NULL){
 		if(foo->sectionname!=NULL){
@@ -559,14 +604,13 @@ int uf_conf_write(g15daemon_t *list,char *filename){
 		}
 		foo=foo->next;
 	}
-	if(fclose(out) != 0) {
+	ok = fclose(out) == 0;
+	uf_conf_free(&disk);
+	if(!ok) {
 		free(buf);
 		return -1;
 	}
 
-	/* write next to the real file if the path is a symlink */
-	if(realpath(filename, target) == NULL)
-		snprintf(target, sizeof(target), "%s", filename);
 	if(uf_file_equals(target, buf, len)) {
 		free(buf);
 		return 0;
@@ -638,14 +682,18 @@ config_section_t *g15daemon_cfg_load_section(g15daemon_t *masterlist,char *name)
 }
 
 /* add a new key, or update the value of an already existing key, or return -1 if section doesnt exist */
-int g15daemon_cfg_write_string(config_section_t *section, char *key, char *val){
+/* add or update key with the given G15_CFG_* origin. An updated value's
+ * old string is not freed: g15daemon_cfg_read_string() hands it out to
+ * plugins, which may still hold it */
+static int uf_cfg_set(config_section_t *section, char *key, char *val, int origin){
 	config_items_t *new = NULL;
 	if(section==NULL)
 		return -1;
-	if((uf_search_confitem(section, key))){
-		free(new);
-		new=uf_search_confitem(section, key);
+	if((new=uf_search_confitem(section, key))){
 		new->value=strdup(val);
+		/* a default never downgrades what the file or the daemon set */
+		if(origin > new->origin || origin == G15_CFG_CHANGED)
+			new->origin=origin;
 	}
 	else{
 		new=g15daemon_xmalloc(sizeof(config_items_t));
@@ -653,6 +701,7 @@ int g15daemon_cfg_write_string(config_section_t *section, char *key, char *val){
 		new->next=NULL;
 		new->key=strdup(key);
 		new->value=strdup(val);
+		new->origin=origin;
 		if(!section->items){
 			new->prev=NULL;
 			section->items=new;
@@ -665,6 +714,11 @@ int g15daemon_cfg_write_string(config_section_t *section, char *key, char *val){
 		}
 	}
 	return 0;
+}
+
+/* add a new key, or update the value of an already existing key, or return -1 if section doesnt exist */
+int g15daemon_cfg_write_string(config_section_t *section, char *key, char *val){
+	return uf_cfg_set(section, key, val, G15_CFG_CHANGED);
 }
 
 /* remove a key/value pair from named section. The list: section->items is
@@ -725,7 +779,7 @@ int g15daemon_cfg_read_bool(config_section_t *section, char *key, int defaultval
 	if(item){
 		return strncmp(item->value,"On",2)==0;
 	}
-	g15daemon_cfg_write_bool(section, key, defaultval);
+	uf_cfg_set(section, key, defaultval ? "On" : "Off", G15_CFG_DEFAULT);
 	return defaultval;
 }
 
@@ -735,7 +789,11 @@ int g15daemon_cfg_read_int(config_section_t *section, char *key, int defaultval)
 	if(item){
 		return atoi(item->value);
 	}
-	g15daemon_cfg_write_int(section, key, defaultval);
+	{
+		char tmp[32];
+		snprintf(tmp,sizeof(tmp),"%i",defaultval);
+		uf_cfg_set(section, key, tmp, G15_CFG_DEFAULT);
+	}
 	return defaultval;
 }
 
@@ -745,7 +803,11 @@ double g15daemon_cfg_read_float(config_section_t *section, char *key, double def
 	if(item){
 		return atof(item->value);
 	}
-	g15daemon_cfg_write_float(section, key, defaultval);
+	{
+		char tmp[64];
+		snprintf(tmp,sizeof(tmp),"%f",defaultval);
+		uf_cfg_set(section, key, tmp, G15_CFG_DEFAULT);
+	}
 	return defaultval;
 }
 
@@ -755,7 +817,7 @@ char* g15daemon_cfg_read_string(config_section_t *section, char *key, char *defa
 	if(item){
 		return item->value;
 	}
-	g15daemon_cfg_write_string(section, key, defaultval);
+	uf_cfg_set(section, key, defaultval, G15_CFG_DEFAULT);
 	return defaultval;
 }
 
@@ -831,7 +893,7 @@ int uf_conf_open(g15daemon_t *list, char *filename) {
 			else
 				val = "";
 			key = uf_trim(start);
-			g15daemon_cfg_write_string(section,key,val);
+			uf_cfg_set(section,key,val,G15_CFG_FROM_FILE);
 		}
 		lines=strtok_r(NULL,"\n",&bar);
 	}
