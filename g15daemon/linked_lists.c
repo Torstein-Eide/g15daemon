@@ -260,6 +260,8 @@ void g15daemon_lcdnode_cycle(g15daemon_t *masterlist){
 		goto skip;
 	}
 	masterlist->current->last_priority =  masterlist->current;
+	/* the draw thread then applies its own contrast and M-key LEDs */
+	masterlist->current->lcd->state_changed = 1;
 	remember_selected_screen(masterlist, masterlist->current->lcd);
 	masterlist->current->lcd->usr_foreground=1;
 	g15daemon_send_event(masterlist->current->lcd, G15_EVENT_VISIBILITY_CHANGED, SCR_VISIBLE);
