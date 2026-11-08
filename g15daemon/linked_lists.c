@@ -29,8 +29,6 @@
 #include <g15daemon.h>
 #include <libg15.h>
 
-extern lcd_t *keyhandler;
-extern unsigned int client_handles_keys;
 extern plugin_info_t *generic_info;
 extern unsigned int cycle_key;
 
@@ -309,11 +307,6 @@ void g15daemon_lcdnode_remove (lcdnode_t *oldnode) {
 		(*masterlist)->current->lcd->state_changed = 1;
 		g15daemon_log(LOG_INFO, "Screen \"%s\" closed, returning to \"%s\"",
 			      oldname, g15daemon_screen_name((*masterlist)->current->lcd));
-	}
-	if(&oldnode->lcd == (void*)keyhandler) {
-		client_handles_keys = 0;
-		keyhandler = NULL;
-		g15daemon_log(LOG_NOTICE,"Client key handler quit, going back to defaults");
 	}
 	if((*masterlist)->head!=oldnode){
 		(*next)->prev = oldnode->prev;

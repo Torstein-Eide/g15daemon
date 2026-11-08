@@ -50,8 +50,6 @@ volatile int leaving = 0;
 int keyboard_backlight_off_onexit = 0;
 unsigned int g15daemon_debug = 0;
 unsigned int cycle_key;
-unsigned int client_handles_keys = 0;
-struct lcd_t *keyhandler = NULL;
 static int loaded_plugins = 0;
 /* set by keyboard_watch_thread while the keyboard is unplugged and being
  * re-initialised - the draw thread skips hardware writes meanwhile */
