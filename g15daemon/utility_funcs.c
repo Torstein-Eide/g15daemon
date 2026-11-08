@@ -122,29 +122,46 @@ void g15daemon_quit_refresh() {
 	pthread_cond_destroy(&lcd_refresh);
 }
 
+/* whether pid looks like a g15daemon - after a crash or SIGKILL the stale
+ * pidfile's pid may belong to an unrelated process by now, and the daemon
+ * would refuse to start ("already running", exit 0). Where /proc isn't
+ * available, any live process counts. */
+static int uf_pid_is_g15daemon(int pid) {
+	char path[64], comm[64];
+	FILE *f;
+	int is = 1;
+	snprintf(path, sizeof(path), "/proc/%d/comm", pid);
+	if((f = fopen(path, "r")) != NULL) {
+		if(fgets(comm, sizeof(comm), f))
+			is = strncmp(comm, "g15daemon", 9) == 0;
+		fclose(f);
+	}
+	return is;
+}
+
 int uf_return_running(){
 	int fd;
 	char pidtxt[128];
 	int pid;
 	int l;
-	if ((fd = open(G15DAEMON_PIDFILE, O_RDWR, 0644)) < 0) {
+	if ((fd = open(G15DAEMON_PIDFILE, O_RDONLY)) < 0) {
 		return -1;
 	}
-	if((l = read(fd,pidtxt,sizeof(pidtxt)-1)) < 0) {
+	l = read(fd,pidtxt,sizeof(pidtxt)-1);
+	close(fd);
+	if(l < 0) {
 		unlink (G15DAEMON_PIDFILE);
-		close(fd);
 		return -1;
 	}
+	pidtxt[l] = '\0';
 	if((pid = atoi(pidtxt)) <= 0) {
 		g15daemon_log(LOG_WARNING,"pidfile corrupt - removing it");
 		unlink(G15DAEMON_PIDFILE);
-		close(fd);
 		return -1;
 	}
-	if((kill(pid,0) != 0) && errno != EPERM ) {
+	if(((kill(pid,0) != 0) && errno != EPERM) || !uf_pid_is_g15daemon(pid)) {
 		g15daemon_log(LOG_WARNING,"Process died - removing pidfile");
 		unlink(G15DAEMON_PIDFILE);
-		close(fd);
 		return -1;
 	}
 	return pid;
@@ -154,11 +171,11 @@ int uf_create_pidfile() {
 	char pidtxt[128];
 	size_t l;
 	int fd;
-	if(!uf_return_running() &&  (fd = open(G15DAEMON_PIDFILE, O_CREAT|O_RDWR|O_EXCL, 0644)) < 0) {
-		g15daemon_log(LOG_WARNING,"previous G15Daemon process died.  removing pidfile");
-		unlink(G15DAEMON_PIDFILE);
-	}
+	/* clears a stale pidfile; main() has already refused to start if a
+	 * live g15daemon owns it */
+	uf_return_running();
 	if ((fd = open(G15DAEMON_PIDFILE, O_CREAT|O_RDWR|O_EXCL, 0644)) < 0) {
+		g15daemon_log(LOG_ERR, "Unable to create %s: %s", G15DAEMON_PIDFILE, strerror(errno));
 		return 1;
 	}
 	snprintf(pidtxt, sizeof(pidtxt), "%lu\n", (unsigned long) getpid());
@@ -167,11 +184,8 @@ int uf_create_pidfile() {
 		g15daemon_log(LOG_WARNING, "write(): %s", strerror(errno));
 		unlink(G15DAEMON_PIDFILE);
 	}
-	if(fd>0) {
-		close(fd);
-		return 0;
-	}
-	return 1;
+	close(fd);
+	return 0;
 }
 
 /* syslog wrapper */

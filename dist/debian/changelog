@@ -8,6 +8,7 @@ g15daemon 3.1.2 buster; urgency=low
  * BugFix: uinput plugin no longer regains root at runtime
  * BugFix: Config written atomically and only when changed
  * libg15daemon_client: IS_FOREGROUND no longer reports true on timeout
+ * Stale pidfile no longer blocks startup
 
 g15daemon 3.1.1 buster; urgency=low
  * BugFix: Digital clock colon and digit spacing

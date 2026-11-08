@@ -191,3 +191,4 @@
 * BugFix: The cycle key no longer hangs the daemon when every screen is marked never-select
 * Change: Removed the unused keyhandler/client_handles_keys code
 * Change: generic_info is declared with its real type
+* BugFix: A stale pidfile whose pid now belongs to another process no longer stops g15daemon from starting; pidfile errors are logged
