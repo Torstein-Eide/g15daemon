@@ -45,6 +45,35 @@
 
 extern volatile int leaving;
 
+/* running plugin threads - main() waits for them at shutdown before
+ * freeing the client list they use */
+static pthread_mutex_t plugins_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t plugins_cond = PTHREAD_COND_INITIALIZER;
+static int plugin_threads = 0;
+
+static void plugin_thread_done(void) {
+	pthread_mutex_lock(&plugins_mutex);
+	plugin_threads--;
+	pthread_cond_broadcast(&plugins_cond);
+	pthread_mutex_unlock(&plugins_mutex);
+}
+
+/* wait up to timeout_sec for every plugin thread to finish (after leaving
+ * was set); returns the number still running */
+int g15_wait_plugins(int timeout_sec) {
+	struct timespec until;
+	int left;
+	clock_gettime(CLOCK_REALTIME, &until);
+	until.tv_sec += timeout_sec;
+	pthread_mutex_lock(&plugins_mutex);
+	while(plugin_threads > 0 &&
+	      pthread_cond_timedwait(&plugins_cond, &plugins_mutex, &until) == 0)
+		;
+	left = plugin_threads;
+	pthread_mutex_unlock(&plugins_mutex);
+	return left;
+}
+
 void * g15daemon_dlopen_plugin(char *name,unsigned int library) {
 	void * handle;
 	char * error;
@@ -166,6 +195,7 @@ void *plugin_thread(plugin_t *plugin_args) {
 		g15daemon_log(LOG_INFO,"Plugin \"%s\" boot successful.",info->name);
 	}
 	else {
+		plugin_thread_done();
 		return NULL;
 	}
 
@@ -184,6 +214,7 @@ void *plugin_thread(plugin_t *plugin_args) {
 
 	g15daemon_log(LOG_INFO,"Removed plugin %s",info->name);
 	g15daemon_dlclose_plugin(handle);
+	plugin_thread_done();
 	return NULL;
 }
 
@@ -281,8 +312,12 @@ int g15_plugin_load (g15daemon_t *masterlist, char *filename) {
 		/* 256k, not 8Mb - was 64k, but the logind plugin's libdbus calls
 		 * (auth, message marshalling) want more headroom than that */
 		pthread_attr_setstacksize(&attr,256*1024);
+		pthread_mutex_lock(&plugins_mutex);
+		plugin_threads++;
+		pthread_mutex_unlock(&plugins_mutex);
 		if (pthread_create(&client_connection, &attr, (void*)plugin_thread, plugin_args) != 0) {
 			g15daemon_log(LOG_ERR,"Unable to create client thread.");
+			plugin_thread_done();
 			}
 			else {
 			pthread_detach(client_connection);

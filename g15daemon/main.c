@@ -648,6 +648,10 @@ int main (int argc, char *argv[]) {
 
 		pthread_join(lcd_thread,NULL);
 		pthread_join(keyboard_thread,NULL);
+		/* plugins (net client threads included) use the client list and
+		 * libg15 - let them finish before either goes away */
+		if(g15_wait_plugins(5) > 0)
+			g15daemon_log(LOG_WARNING,"Some plugins did not stop in time");
 		/* blank the screen but leave the backlights as they are - startup
 		 * no longer forces a level, so switching them off here left the
 		 * LCD dark after every restart */

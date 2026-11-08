@@ -44,8 +44,16 @@
 #include <g15daemon.h>
 #include "peer_ident.h"
 
-static int leaving = 0;
+/* the daemon's flag - a plugin-local copy was only set by the exit
+ * function, which only ran once lcdserver_thread had returned, i.e. never,
+ * so client threads outlived ll_lcdlist_destroy() at shutdown */
+extern volatile int leaving;
 static int server_events(plugin_event_t *myevent);
+
+/* running client threads, so lcdserver_thread can wait for them */
+static pthread_mutex_t clients_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t clients_cond = PTHREAD_COND_INITIALIZER;
+static int client_threads = 0;
 
 #ifndef SO_PRIORITY
 	#define SO_PRIORITY 12
@@ -387,6 +395,10 @@ exitthread:
 			g15daemon_lcdnode_remove(display);
 			log_client_list(masterlist);
 		}
+		pthread_mutex_lock(&clients_mutex);
+		client_threads--;
+		pthread_cond_broadcast(&clients_cond);
+		pthread_mutex_unlock(&clients_mutex);
 		pthread_exit(NULL);
 }
 
@@ -434,7 +446,13 @@ static int g15_clientconnect (g15daemon_t **g15daemon, int listening_socket) {
 	pthread_attr_init(&attr);
 	pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);
 	pthread_attr_setstacksize(&attr,256*1024); /* set stack to 768k - dont need 8Mb - this is probably rather excessive also */
+	pthread_mutex_lock(&clients_mutex);
+	client_threads++;
+	pthread_mutex_unlock(&clients_mutex);
 	if (pthread_create(&client_connection, &attr, lcd_client_thread, clientnode) != 0) {
+		pthread_mutex_lock(&clients_mutex);
+		client_threads--;
+		pthread_mutex_unlock(&clients_mutex);
 		g15daemon_log(LOG_ERR,"Unable to create client thread.");
 		if (close(conn_s) < 0 ) {
 			g15daemon_log(LOG_WARNING, "error calling close()\n");
@@ -461,6 +479,19 @@ static void lcdserver_thread(void *lcdlist){
 		g15_clientconnect(&masterlist,g15_socket);
 	}
 	close(g15_socket);
+	/* client threads notice leaving within their 500ms poll() */
+	{
+		struct timespec until;
+		clock_gettime(CLOCK_REALTIME, &until);
+		until.tv_sec += 3;
+		pthread_mutex_lock(&clients_mutex);
+		while(client_threads > 0 &&
+		      pthread_cond_timedwait(&clients_cond, &clients_mutex, &until) == 0)
+			;
+		if(client_threads > 0)
+			g15daemon_log(LOG_WARNING, "%d client thread(s) still running at exit", client_threads);
+		pthread_mutex_unlock(&clients_mutex);
+	}
 	return;
 }
 
@@ -490,13 +521,9 @@ static int server_events(plugin_event_t *event) {
 	return G15_PLUGIN_OK;
 }
 
-static void g15plugin_net_exit() {
-	leaving = 1;
-}
-
 /* if no exitfunc or eventhandler, member should be NULL */
 plugin_info_t g15plugin_info[] = {
 	/* TYPE, name, initfunc, updatefreq, exitfunc, eventhandler, initfunc */
-	{G15_PLUGIN_LCD_SERVER, "LCDServer"	, (void*)lcdserver_thread, 500, (void*)g15plugin_net_exit, (void*)server_events, NULL},
+	{G15_PLUGIN_LCD_SERVER, "LCDServer"	, (void*)lcdserver_thread, 500, NULL, (void*)server_events, NULL},
 	{G15_PLUGIN_NONE,               ""          			, NULL,   0,   			NULL,            NULL,           NULL}
 };

@@ -307,6 +307,8 @@ int uf_return_running();
 int uf_create_pidfile();
 /* open & run all plugins in the given directory */
 int g15_open_all_plugins(g15daemon_t *masterlist, char *plugin_directory);
+/* wait up to timeout_sec for plugin threads to end, returns how many are left */
+int g15_wait_plugins(int timeout_sec);
 /* linked lists */
 g15daemon_t *ll_lcdlist_init();
 void ll_lcdlist_destroy(g15daemon_t **masterlist);
