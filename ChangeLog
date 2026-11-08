@@ -198,3 +198,4 @@
 * BugFix: A broken or incompatible plugin .so is skipped with an error instead of crashing the daemon
 * BugFix: L1 tap-vs-hold timing uses a monotonic clock, so a clock change can't turn a tap into a hold
 * BugFix: The systemd status line is no longer cut off with long foreground screen names
+* BugFix: ';' comments containing ':' or '=' (e.g. the shipped "; Locale: ..." notes) are no longer cut off when g15daemon.conf is written back

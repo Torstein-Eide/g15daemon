@@ -805,8 +805,12 @@ int uf_conf_open(g15daemon_t *list, char *filename) {
 				section=g15daemon_cfg_load_section(list,"Global");
 			}
 			/* split on the first ':' or '=' only - the value keeps any
-			 * later ones (commands like "env DISPLAY=:0 ...") */
-			sep = start + strcspn(start, ":=");
+			 * later ones (commands like "env DISPLAY=:0 ..."). A ';'
+			 * comment is kept whole: the writer only writes its key */
+			if(start[0]==';')
+				sep = start + strlen(start);
+			else
+				sep = start + strcspn(start, ":=");
 			if(*sep) {
 				*sep = '\0';
 				val = uf_trim(sep+1);
