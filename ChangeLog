@@ -177,3 +177,4 @@
 * BugFix: g15daemon.conf values are split on the first ":"/"=" only, so commands like "env DISPLAY=:0 ..." are no longer cut short (and written back cut short at shutdown); "]" inside a value no longer starts a section; a symlinked conf is read in full; a lone "]" line no longer overflows a buffer
 * BugFix: An unplugged keyboard no longer blocks the LCD thread (and with it the systemd watchdog, which killed the daemon after 30s); the watchdog is also pinged when the screen in front does not update
 * BugFix: Shutdown waits (up to 5s) for plugin and client threads before freeing the client list, instead of freeing it under still-running client threads
+* BugFix: SIGPIPE is ignored, so a key press as a client disconnects can no longer kill the daemon when run outside systemd (OpenRC/runit/66 scripts, -d from a shell)

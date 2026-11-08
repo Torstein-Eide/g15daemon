@@ -52,6 +52,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <config.h>
@@ -373,6 +374,8 @@ static void run_command(const char *cmd) {
 					close(fd);
 			}
 #endif
+			/* g15daemon ignores SIGPIPE; the command shouldn't inherit that */
+			signal(SIGPIPE, SIG_DFL);
 			execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
 			_exit(127);
 		}

@@ -384,8 +384,6 @@ void g15daemon_sighandler(int sig) {
 		case SIGQUIT:
 			leaving = 1;
 			break;
-		case SIGPIPE:
-			break;
 	}
 }
 
@@ -433,6 +431,10 @@ int main (int argc, char *argv[]) {
 	pthread_t keyboard_thread;
 	pthread_t lcd_thread;
 	memset(user,0,256);
+	/* a send() to a client that just disconnected must not kill the
+	 * daemon - systemd ignores SIGPIPE for services by default, the other
+	 * init scripts and a shell running -d don't */
+	signal(SIGPIPE, SIG_IGN);
 	for (i=0;i<argc;i++) {
 		char daemonargs[20];
 		memset(daemonargs,0,20);
