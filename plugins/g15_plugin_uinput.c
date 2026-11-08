@@ -54,30 +54,15 @@ static int map_Lkeys = 0;
 
 static int g15_init_uinput(void *plugin_args) {
 	int i=0;
-	char *custom_filename;
 	g15daemon_t *masterlist = (g15daemon_t*) plugin_args;
 	struct uinput_user_dev uinp;
-	static const char *uinput_device_fn[] = { "/dev/uinput", "/dev/input/uinput","/dev/misc/uinput",0};
 	uinput_cfg = g15daemon_cfg_load_section(masterlist,"Keyboard OS Mapping (uinput)");
-	custom_filename = g15daemon_cfg_read_string(uinput_cfg, "device",(char*)uinput_device_fn[1]);
 	map_Lkeys=g15daemon_cfg_read_int(uinput_cfg, "Lkeys.mapped",0);
-	if(seteuid(0) != 0 || setegid(0) != 0) {
-		g15daemon_log(LOG_ERR,"Unable to regain root privileges to open UINPUT device: %s",strerror(errno));
-		return -1;
-	}
-	while (uinput_device_fn[i] && (uinp_fd = open(uinput_device_fn[i],O_RDWR))<0){
-		++i;
-	}
-	if(uinp_fd<0){ /* try reading the users preference in the config */
-		uinp_fd = open(custom_filename,O_RDWR);
-	}
+	/* opened by main() before the privilege drop (the "device" key is
+	 * read there too) */
+	uinp_fd = masterlist->uinput_fd;
 	if(uinp_fd<0){
 		g15daemon_log(LOG_ERR,"Unable to open UINPUT device.  Please ensure the uinput driver is loaded into the kernel and that you have permission to open the device.");
-		return -1;
-	}
-	/* all other processes/threads should be seteuid nobody */
-	if(setegid(masterlist->nobody->pw_gid) != 0 || seteuid(masterlist->nobody->pw_uid) != 0) {
-		g15daemon_log(LOG_ERR,"Unable to drop privileges to uid %i: %s",masterlist->nobody->pw_uid,strerror(errno));
 		return -1;
 	}
 

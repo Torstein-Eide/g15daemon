@@ -83,6 +83,7 @@ g15daemon_t *ll_lcdlist_init () {
 	masterlist->head->next = masterlist->head;
 	masterlist->head->list = masterlist;
 	masterlist->keyboard_handler = NULL;
+	masterlist->uinput_fd = -1;
 	masterlist->numclients = 0;
 	pthread_mutex_unlock(&lcdlist_mutex);
 	return masterlist;

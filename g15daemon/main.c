@@ -210,6 +210,27 @@ static int cfg_backlight_level(config_section_t *cfg, char *key) {
 	return level > G15_BRIGHTNESS_BRIGHT ? G15_BRIGHTNESS_BRIGHT : level;
 }
 
+/* Open /dev/uinput for the uinput plugin while still root. The plugin used
+ * to seteuid(0) itself to do it - and seteuid() applies to every thread, so
+ * the net plugin's already-running accept/client threads ran as root
+ * meanwhile (and stayed root if the open failed). */
+static int open_uinput(g15daemon_t *masterlist) {
+#ifdef HAVE_LINUX_UINPUT_H
+	static const char *paths[] = { "/dev/uinput", "/dev/input/uinput", "/dev/misc/uinput", NULL };
+	config_section_t *cfg = g15daemon_cfg_load_section(masterlist, "Keyboard OS Mapping (uinput)");
+	char *custom = g15daemon_cfg_read_string(cfg, "device", (char*)paths[1]);
+	int i, fd = -1;
+	for(i = 0; paths[i] && fd < 0; i++)
+		fd = open(paths[i], O_RDWR | O_CLOEXEC);
+	if(fd < 0)
+		fd = open(custom, O_RDWR | O_CLOEXEC);
+	return fd;
+#else
+	(void)masterlist;
+	return -1;
+#endif
+}
+
 /* set the configured level, or with none configured adopt whatever the
  * light is at now (as left by the kernel, the light key or a previous run)
  * instead of forcing it */
@@ -594,6 +615,7 @@ int main (int argc, char *argv[]) {
 			cycle_key = 1==g15daemon_cfg_read_bool(global_cfg,"Use MR as Cycle Key",0)?G15_KEY_MR:G15_KEY_L1;
 		}
 
+		lcdlist->uinput_fd = open_uinput(lcdlist);
 #ifndef OSTYPE_SOLARIS
 		/* all other processes/threads should be seteuid nobody */
 		if(nobody!=NULL) {

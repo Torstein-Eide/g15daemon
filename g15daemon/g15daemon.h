@@ -263,6 +263,9 @@ struct g15daemon_s {
 	 * levels above are kept for restoring once unmasked. */
 	unsigned int backlight_idle;
 	unsigned int remote_keyhandler_sock;
+	/* /dev/uinput, opened by main() while still root so the uinput plugin
+	 * needn't seteuid(0) at runtime; -1 if unavailable */
+	int uinput_fd;
 	/* systemd status reporting - see sd_notify_util.h and main.c */
 	struct timespec start_time;
 	unsigned long total_clients_connected;

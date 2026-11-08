@@ -5,6 +5,7 @@ g15daemon 3.1.2 buster; urgency=low
  * BugFix: Client disconnects can no longer kill the daemon via SIGPIPE
  * BugFix: Races between key presses, redraws and client disconnects
  * Change: Simultaneous TCP clients limited to MAX_CLIENTS (10)
+ * BugFix: uinput plugin no longer regains root at runtime
 
 g15daemon 3.1.1 buster; urgency=low
  * BugFix: Digital clock colon and digit spacing
